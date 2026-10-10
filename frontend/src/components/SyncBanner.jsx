@@ -12,7 +12,7 @@ export const PENDING_GRACE_MS = 5000
 
 /* The connection, always in view while the app is not connected to a server: offline, the server
    unreachable or answering with an error (its HTTP code, for whoever runs it), a server that no
-   longer accepts this device, an answer that is not openGym's, and no server at all — a phone
+   longer accepts this device, an answer that is not Kuch's, and no server at all — a phone
    kept local, a guest in a browser. It cannot be dismissed; it goes when the condition does — or
    when Settings → "Show connection status" is off, and then a dot on Home says a problem is there.
    The first ones say what is wrong and that the changes are kept here, with the one thing to do
