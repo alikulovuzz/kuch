@@ -28,7 +28,7 @@ Requirements: [Docker](https://docs.docker.com/get-docker/) with the Compose plu
 git clone https://github.com/DuarteSantos8/openGym   # or https://gitlab.com/DuarteSantos8/opengym — same repo
 cd openGym
 cp .env.example .env
-docker compose pull   # prebuilt images from GitLab's registry (amd64 + arm64; the same images are on ghcr.io) — or skip and build from source
+docker compose pull   # prebuilt images from ghcr.io (amd64 + arm64) — or skip and build from source
 docker compose up -d
 ```
 
@@ -480,7 +480,7 @@ and it asks its own address for the API, so everything stays inside the prefix o
 ```caddy
 example.com {
     handle_path /gym/* {
-        reverse_proxy opengym-web:80
+        reverse_proxy kuch-web:80
     }
 }
 ```
