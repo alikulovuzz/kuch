@@ -1,8 +1,46 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { checkForUpdate, sha256, resetUpdateCheck } from './update.js'
+import { checkForUpdate, sha256, resetUpdateCheck, UPDATE_FEED, openReleasesPage, downloadAndInstall } from './update.js'
 
 // __APP_VERSION__ is defined at build time by vite.config.js (reads package.json).
 // In the test environment vitest applies the same define, so it's available here.
+
+// A stand-in feed for the checks below; the shipped one is UPDATE_FEED.
+const FEED = { api: 'https://releases.example/api/releases', page: 'https://releases.example/releases' }
+
+// This fork publishes no release feed yet, so the shipped updater is off. Upstream's APK is signed
+// with a different key and can never install over this build: offering it would only fail.
+describe('the disabled updater', () => {
+  let originalFetch
+  beforeEach(() => { originalFetch = globalThis.fetch; resetUpdateCheck() })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('ships with no release feed', () => {
+    expect(UPDATE_FEED).toBe(null)
+  })
+
+  it('offers nothing and asks no server', async () => {
+    globalThis.fetch = vi.fn(() => Promise.reject(new Error('the disabled updater must not fetch')))
+    const result = await checkForUpdate()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(result).toEqual({ hasUpdate: false, latestVersion: __APP_VERSION__, apkUrl: null, hashUrl: null })
+  })
+
+  it('has no releases page to open, on the web or from Settings', async () => {
+    const hadWindow = 'window' in globalThis, originalWindow = globalThis.window
+    globalThis.window = { open: vi.fn() }
+    try {
+      openReleasesPage()
+      await downloadAndInstall('https://releases.example/kuch.apk')   // the web build's path
+      expect(window.open).not.toHaveBeenCalled()
+
+      openReleasesPage(FEED)
+      expect(window.open).toHaveBeenCalledWith('https://releases.example/releases', '_blank', 'noopener')
+    } finally {
+      if (hadWindow) globalThis.window = originalWindow
+      else delete globalThis.window
+    }
+  })
+})
 
 describe('sha256', () => {
   it('computes the correct hash for a known input', async () => {
@@ -39,9 +77,15 @@ describe('checkForUpdate', () => {
     }))
   }
 
+  it('asks the feed it is given for its latest release', async () => {
+    mockFetch([])
+    await checkForUpdate(FEED)
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://releases.example/api/releases?per_page=1')
+  })
+
   it('reports no update when the latest release matches the current version', async () => {
     mockFetch([{ tag_name: 'v' + __APP_VERSION__, assets: { links: [] } }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hasUpdate).toBe(false)
     expect(result.latestVersion).toBe(__APP_VERSION__)
     expect(result.apkUrl).toBe(null)
@@ -50,27 +94,27 @@ describe('checkForUpdate', () => {
 
   it('reports no update when the latest release is older than current', async () => {
     mockFetch([{ tag_name: 'v0.0.1', assets: { links: [] } }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hasUpdate).toBe(false)
     expect(result.latestVersion).toBe('0.0.1')
   })
 
   it('reports an update when the latest release is newer', async () => {
     mockFetch([{ tag_name: 'v99.0.0', assets: { links: [] } }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hasUpdate).toBe(true)
     expect(result.latestVersion).toBe('99.0.0')
   })
 
   it('strips the v prefix from the tag name', async () => {
     mockFetch([{ tag_name: 'v99.1.2', assets: { links: [] } }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.latestVersion).toBe('99.1.2')
   })
 
   it('handles tag names without a v prefix', async () => {
     mockFetch([{ tag_name: '99.0.0', assets: { links: [] } }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hasUpdate).toBe(true)
     expect(result.latestVersion).toBe('99.0.0')
   })
@@ -81,7 +125,7 @@ describe('checkForUpdate', () => {
       tag_name: 'v99.0.0',
       assets: { links: [{ url: apkUrl, direct_asset_url: apkUrl }] }
     }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.apkUrl).toBe(apkUrl)
   })
 
@@ -95,7 +139,7 @@ describe('checkForUpdate', () => {
         }]
       }
     }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.apkUrl).toBe('https://direct.example/opengym.apk')
   })
 
@@ -104,7 +148,7 @@ describe('checkForUpdate', () => {
       tag_name: 'v99.0.0',
       assets: { links: [{ url: 'https://example.com/changelog.md', direct_asset_url: 'https://example.com/changelog.md' }] }
     }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hasUpdate).toBe(true)
     expect(result.apkUrl).toBe(null)
   })
@@ -120,7 +164,7 @@ describe('checkForUpdate', () => {
         ]
       }
     }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hashUrl).toBe(hashUrl)
   })
 
@@ -134,7 +178,7 @@ describe('checkForUpdate', () => {
         ]
       }
     }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hashUrl).toBe('https://example.com/checksum.txt')
   })
 
@@ -195,7 +239,7 @@ describe('checkForUpdate', () => {
 
   it('finds the APK and its checksum in a real gitlab.com release payload', async () => {
     mockFetch(REAL_RELEASE)
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.latestVersion).toBe('1.3.1')
     expect(result.apkUrl).toBe('https://gitlab.com/api/v4/projects/85678327/packages/generic/opengym-android/1.3.1/openGym-1.3.1.apk')
     expect(result.hashUrl).toBe('https://gitlab.com/api/v4/projects/85678327/packages/generic/opengym-android/1.3.1/openGym-1.3.1.apk.sha256')
@@ -206,13 +250,13 @@ describe('checkForUpdate', () => {
       tag_name: 'v99.0.0',
       assets: { links: [{ url: 'https://example.com/opengym.apk', direct_asset_url: 'https://example.com/opengym.apk' }] }
     }])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hashUrl).toBe(null)
   })
 
   it('returns no update when the releases array is empty', async () => {
     mockFetch([])
-    const result = await checkForUpdate()
+    const result = await checkForUpdate(FEED)
     expect(result.hasUpdate).toBe(false)
     expect(result.latestVersion).toBe(__APP_VERSION__)
     expect(result.hashUrl).toBe(null)
@@ -220,12 +264,12 @@ describe('checkForUpdate', () => {
 
   it('throws when the API responds with an error status', async () => {
     mockFetch(null, 500)
-    await expect(checkForUpdate()).rejects.toThrow('GitLab API 500')
+    await expect(checkForUpdate(FEED)).rejects.toThrow('GitLab API 500')
   })
 
   it('throws on network failure', async () => {
     globalThis.fetch = vi.fn(() => Promise.reject(new Error('Network error')))
-    await expect(checkForUpdate()).rejects.toThrow('Network error')
+    await expect(checkForUpdate(FEED)).rejects.toThrow('Network error')
   })
 })
 
@@ -254,17 +298,17 @@ describe('semver comparison (via checkForUpdate behavior)', () => {
 
   it('detects a patch bump as an update', async () => {
     mockRelease(bump(2, 1))
-    expect((await checkForUpdate()).hasUpdate).toBe(true)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(true)
   })
 
   it('detects a minor bump as an update', async () => {
     mockRelease(bump(1, 1))
-    expect((await checkForUpdate()).hasUpdate).toBe(true)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(true)
   })
 
   it('detects a major bump as an update', async () => {
     mockRelease(bump(0, 1))
-    expect((await checkForUpdate()).hasUpdate).toBe(true)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(true)
   })
 
   // A version may say which build it came from, as semver build metadata ("1.3.8+2026-09-18.2").
@@ -279,21 +323,21 @@ describe('semver comparison (via checkForUpdate behavior)', () => {
 
   it('judges a tag that carries build metadata on its numbers alone', async () => {
     mockRelease(tagged(MAJOR, MINOR, PATCH_N + 1))
-    expect((await checkForUpdate()).hasUpdate).toBe(true)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(true)
 
     resetUpdateCheck()
     mockRelease(tagged(MAJOR, MINOR, PATCH_N))
-    const same = await checkForUpdate()
+    const same = await checkForUpdate(FEED)
     expect(same.hasUpdate).toBe(false)                                   // the running release
     expect(same.latestVersion).toBe(__APP_VERSION__.split('+')[0] + BUILD)   // echoed as it came
 
     resetUpdateCheck()
     mockRelease(tagged(MAJOR, Math.max(0, MINOR - 1), 0))
-    expect((await checkForUpdate()).hasUpdate).toBe(false)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(false)
 
     resetUpdateCheck()
     mockRelease(tagged(MAJOR + 1, 0, 0))
-    expect((await checkForUpdate()).hasUpdate).toBe(true)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(true)
   })
 
   it('does not flag an older patch as an update', async () => {
@@ -301,13 +345,13 @@ describe('semver comparison (via checkForUpdate behavior)', () => {
     mockRelease('v' + [MAJ, MIN, Math.max(0, PATCH - 1)].join('.'))
     // Only meaningful when we could actually go lower; when patch is 0 this equals current,
     // which correctly reports no update either way.
-    expect((await checkForUpdate()).hasUpdate).toBe(false)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(false)
   })
 
   it('does not flag an older minor as an update', async () => {
     // A version guaranteed lower than any 1.x+ release: same major, minor 0, patch 0,
     // minus one on the minor when possible.
     mockRelease('v' + [MAJ, Math.max(0, MIN - 1), 0].join('.'))
-    expect((await checkForUpdate()).hasUpdate).toBe(false)
+    expect((await checkForUpdate(FEED)).hasUpdate).toBe(false)
   })
 })
