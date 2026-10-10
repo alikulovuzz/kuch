@@ -13,7 +13,7 @@ Not in this folder (added at deploy time):
 - `openGym.apk` — the signed release build (see `../docs/MOBILE.md`)
 - `demo/` — the browser-only demo build of the app, embedded in the `#demo` section and
   reachable on its own at `/demo/`. Built from `../frontend` with `VITE_DEMO=1` and the
-  jsDelivr media bases (see the `pages` job in `../.gitlab-ci.yml`), so the ~140 MB
+  jsDelivr media bases (upstream's `pages` job in its `.gitlab-ci.yml`, not part of this fork), so the ~140 MB
   of exercise media stays out of it. It has to live on this host: the site frames it, and
   `X-Frame-Options: SAMEORIGIN` would block it from anywhere else.
 
