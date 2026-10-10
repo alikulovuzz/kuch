@@ -11,7 +11,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Close**: `gh issue close <number> --comment "..."`
 
-Never target upstream `DuarteSantos8/openGym`: in a fork clone `gh` may default to the parent repo. Pass `--repo alikulovuzz/openGym` on every `gh issue` / `gh pr` call, or export `GH_REPO=alikulovuzz/openGym`. In `gh api` paths, `<owner>/<repo>` is `alikulovuzz/openGym`.
+Never target upstream `DuarteSantos8/openGym`: in a fork clone `gh` may default to the parent repo. Pass `--repo alikulovuzz/kuch` on every `gh issue` / `gh pr` call, or export `GH_REPO=alikulovuzz/kuch`. In `gh api` paths, `<owner>/<repo>` is `alikulovuzz/kuch`.
 
 ## Pull requests as a triage surface
 

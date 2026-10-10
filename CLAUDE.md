@@ -145,7 +145,7 @@ output), `api`, `web` (multi-stage build of `frontend/` served by nginx, which a
 
 ### Issue tracker
 
-Issues live in GitHub Issues on `alikulovuzz/openGym` (via `gh`, always with `--repo`). See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues on `alikulovuzz/kuch` (via `gh`, always with `--repo`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
