@@ -97,7 +97,7 @@ const requestStructured = async (prompt, batch) => {
     if (envelope.is_error || !envelope.structured_output) throw new Error(envelope.result || 'Claude returned no structured output')
     structured = envelope.structured_output
   } else {
-    const temp = mkdtempSync(join(tmpdir(), 'opengym-de-names-'))
+    const temp = mkdtempSync(join(tmpdir(), 'kuch-de-names-'))
     const schemaPath = join(temp, 'schema.json')
     const outputPath = join(temp, 'output.json')
     try {

@@ -4,7 +4,7 @@ services:
   # One-time: download the exercise images + GIFs into ./media (skipped if already there).
   # ~140 MB, from github.com/hasaneyldrm/exercises-dataset. That dataset is MIT for the
   # metadata and instruction text, but the images and GIFs are © Gym visual
-  # (https://gymvisual.com/) and are used under the dataset's terms — openGym neither
+  # (https://gymvisual.com/) and are used under the dataset's terms — Kuch neither
   # redistributes nor relicenses them. See NOTICE.md.
   media:
     image: alpine/git
@@ -19,8 +19,8 @@ services:
           echo "  Source:  github.com/hasaneyldrm/exercises-dataset"
           echo "  Metadata and instruction text: MIT."
           echo "  Images and animations: © Gym visual — https://gymvisual.com/"
-          echo "  They are used under that dataset's terms, not openGym's AGPL, and are"
-          echo "  downloaded from upstream — openGym does not redistribute them."
+          echo "  They are used under that dataset's terms, not Kuch's AGPL, and are"
+          echo "  downloaded from upstream — Kuch does not redistribute them."
           echo "  Terms: https://gymvisual.com/content/3-terms-and-conditions-of-use"
           echo "  Reusing this media yourself, commercially or not, needs your own licence"
           echo "  from Gym visual. Details in NOTICE.md."
