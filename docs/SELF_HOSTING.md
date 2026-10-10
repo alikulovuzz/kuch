@@ -659,8 +659,8 @@ these in order — the first two account for most of it.
 **1. Ask the server what it actually loaded.** It prints both values on startup:
 
 ```
-docker compose logs api | grep 'gym-api on'
-# gym-api on :3000 (rpID=gym.example.com, origin=https://gym.example.com)
+docker compose logs api | grep 'kuch-api on'
+# kuch-api on :3000 (rpID=gym.example.com, origin=https://gym.example.com)
 ```
 
 If that disagrees with your `.env`, the container is still running the old environment.

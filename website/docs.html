@@ -910,7 +910,7 @@ Leg Day,Leg Press,2026-08-21,200,1</code></pre>
   <p>The most common support question. Work through these in order:</p>
   <ol>
     <li><b>Ask the server what it actually loaded:</b>
-        <code>docker compose logs api | grep 'gym-api on'</code> prints the
+        <code>docker compose logs api | grep 'kuch-api on'</code> prints the
         <code>rpID</code>/<code>origin</code> it runs with. If that disagrees with your
         <code>.env</code>: <code>docker compose restart</code> does <b>not</b> re-read
         <code>.env</code>; use <code>docker compose up -d</code>.</li>

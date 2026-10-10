@@ -31,7 +31,7 @@ export function boundPort(child, tail = () => '') {
     const give = setTimeout(() => reject(new Error(`server never announced a port:\n${tail() || seen}`)), 20000);
     const look = d => {
       seen += d;
-      const m = /gym-api on :(\d+)/.exec(seen);
+      const m = /kuch-api on :(\d+)/.exec(seen);
       if (!m) return;
       clearTimeout(give);
       child.stdout.off('data', look);

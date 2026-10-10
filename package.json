@@ -1,4 +1,5 @@
 {
+  "name": "kuch",
   "devDependencies": {
     "js-yaml": "^4.1.0"
   }
