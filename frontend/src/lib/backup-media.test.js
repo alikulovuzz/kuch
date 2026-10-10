@@ -77,16 +77,30 @@ describe('import', () => {
     expect(read.state.customEx[1].media.mime).toBe('image/jpeg')
   })
 
-  it('refuses what is not an openGym backup, zipped or not', async () => {
+  // Exports are named kuch-backup-<date> since the fork, but a file exported before it, by this
+  // app or by upstream openGym, is still named opengym-backup-<date>: it imports the same way.
+  // The zip's inner entry keeps its old name, so old and new zips are one format.
+  it('reads a backup exported under the pre-fork opengym-backup-* name, JSON or zip', async () => {
+    const S = stateWith([{ id: 'a', n: 'a' }])
+    const json = await readBackupFile(new File([JSON.stringify(S)], 'opengym-backup-2026-01-02.json', { type: 'application/json' }))
+    expect(json.state.customEx).toEqual([{ id: 'a', n: 'a' }])
+    expect(BACKUP_JSON).toBe('opengym-backup.json')
+    const zip = await zipStore([{ name: BACKUP_JSON, blob: new Blob([JSON.stringify(S)]) }])
+    const zipped = await readBackupFile(new File([zip], 'opengym-backup-2026-01-02.zip'))
+    expect(zipped.zip).toBe(true)
+    expect(zipped.state.customEx).toEqual([{ id: 'a', n: 'a' }])
+  })
+
+  it('refuses what is not a Kuch backup, zipped or not', async () => {
     await expect(readBackupFile(new File(['{"hello":1}'], 'x.json'))).rejects.toThrow()
     const zip = await zipStore([{ name: 'something.txt', blob: new Blob(['x']) }])
     await expect(readBackupFile(new File([zip], 'x.zip'))).rejects.toThrow()
   })
 
-  // German QA: 'Import fehlgeschlagen: not-zip', '... not an openGym backup', 'Unexpected token ...'.
+  // German QA: 'Import fehlgeschlagen: not-zip', '... not a Kuch backup', 'Unexpected token ...'.
   it('says why an import failed in words, never the thrown developer text', async () => {
     const why = async (content, name) => { try { await readBackupFile(new File([content], name)) } catch (e) { return backupImportError(e) } }
-    const notOurs = 'That file isn’t an openGym backup.'
+    const notOurs = 'That file isn’t a Kuch backup.'
     expect(await why('[1,2]', 'x.json')).toBe(notOurs)
     expect(await why('hello there', 'x.txt')).toBe(notOurs)
     expect(await why(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4]), 'fake.zip')).toBe(notOurs)
