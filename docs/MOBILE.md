@@ -1,7 +1,7 @@
 # The phone app (Android and iOS)
 
 **Just want the app?** Download the APK from the
-[latest release](https://github.com/DuarteSantos8/openGym/releases/latest) and read
+[latest release](https://github.com/alikulovuzz/kuch/releases/latest) and read
 [how the phone app works](#how-the-phone-app-works) and
 [connecting it to your server](#connecting-the-app-to-your-own-server). On an iPhone, see
 [what's possible](#iphone--whats-actually-possible). Everything from [Prerequisites](#prerequisites)
@@ -9,7 +9,7 @@ on is for building the app yourself.
 
 ## How the phone app works
 
-openGym ships in two flavors from the same codebase:
+Kuch ships in two flavors from the same codebase:
 
 | | **Self-hosted** (this repo's default) | **Mobile app** (`VITE_MOBILE=1`) |
 |---|---|---|
@@ -28,7 +28,7 @@ through the OS share sheet instead of a browser download.
 ### Connecting the app to your own server
 
 On first launch the app asks how you want to use it. Alongside the fully local mode above,
-you can instead **connect it to a self-hosted openGym server** — your data then lives there,
+you can instead **connect it to a self-hosted Kuch server** — your data then lives there,
 synced the same way the browser PWA does, instead of only on the phone. This is a mode of the
 same app, not a different build or download.
 
@@ -44,10 +44,10 @@ or Settings → Account → **"Connect to my server"** later) to finish. Notes:
   `http://` server before anything is sent, and pairing says so. It also keeps the bearer token
   (the connection carries one instead of a cookie) off the network in plain text.
 - Pairing says your server "refused the app's request (CORS)", or that "a login page or proxy
-  rule replied instead of openGym", or fails with "Failed to fetch" on an older version, while
-  the browser works? Something in front of openGym is answering the app instead: a reverse proxy
+  rule replied instead of Kuch", or fails with "Failed to fetch" on an older version, while
+  the browser works? Something in front of Kuch is answering the app instead: a reverse proxy
   handling the CORS preflight itself, adding a second `Access-Control-Allow-Origin`, or SSO /
-  forward-auth on `/api/`. openGym answers the preflight and does its own sign-in; see
+  forward-auth on `/api/`. Kuch answers the preflight and does its own sign-in; see
   [Phone app and CORS](SELF_HOSTING.md#phone-app-and-cors) for the fixes and a `curl` self-check.
 - The token lasts `SESSION_DAYS` (90 by default, see `docs/SELF_HOSTING.md`) and renews
   itself: every time the app starts, a token past half its life is swapped for a fresh one.
@@ -75,7 +75,7 @@ status bar says so on every screen, and stays until the condition is gone:
 |---|---|---|
 | *Offline — your changes are saved on this device…* | No answer at all: no network, the server is down, or it did not answer within 20 s (60 s for an upload). | Nothing — it syncs by itself once the server is reachable. **Try again** checks at once. |
 | *Your server answered with an error (HTTP 502)…* | The server (or the proxy in front of it) answered with an error. The code is the one the server sent. | Check the server and its proxy logs; **Try again** once it is back. A 413 means the proxy's upload limit is too small (`client_max_body_size`). |
-| *Your server's address answered with something other than openGym (HTTP 200)…* | Something else answered in the server's place — typically a proxy's sign-in page or a catch-all that serves the web app for `/api/*`. | Let `/api/*` through to the openGym API unchanged, including the `Authorization` header. |
+| *Your server's address answered with something other than Kuch (HTTP 200)…* | Something else answered in the server's place — typically a proxy's sign-in page or a catch-all that serves the web app for `/api/*`. | Let `/api/*` through to the Kuch API unchanged, including the `Authorization` header. |
 | *Your server no longer accepts this phone…* | The server refused the phone's token (401): "sign out everywhere", the account disabled, a `data/secret` that was replaced, a token older than `SESSION_DAYS`, or a proxy with its own login that rejects `Authorization: Bearer`. | **Pair again**: in a signed-in browser open Settings → "Pair the mobile app" and enter the new code. The address is already filled in. |
 | *This phone is no longer paired with your server…* | A phone that an earlier version of the app unpaired by itself after its token was refused. The address is gone. | **Pair again**, typing the address. |
 | *On this phone only, not connected to a server* | Local mode, chosen at first launch or after Disconnect. Said quietly. | Nothing, or **Connect** to pair with a server. |
@@ -100,7 +100,7 @@ Where the phone keeps things, in case you ever need them by hand:
   belongs to: a paired phone only ever takes the file back for that account.
 - `opengym-stash.json`, same directory — changes kept by "Disconnect anyway" or by another
   account pairing, waiting for their server and account.
-- `Documents/openGym/opengym-backup-YYYY-MM-DD.json` — only with Settings → Data & backup → **Auto-backup on
+- `Documents/Kuch/kuch-backup-YYYY-MM-DD.json` — only with Settings → Data & backup → **Auto-backup on
   changes** switched on: a dated copy after every finished workout or edited routine, in a
   folder of its own under the phone's Documents folder, where a file manager or a sync app
   (Syncthing, a cloud folder) can reach it without taking the rest of Documents along. One
@@ -112,7 +112,7 @@ Where the phone keeps things, in case you ever need them by hand:
   system folder picker — a sync app's folder, an SD card — and the copies go there instead,
   pruned to the same 14. The choice belongs to this phone and does not sync. If the folder
   stops accepting copies (the permission revoked, the folder deleted), they go to
-  `Documents/openGym` again and Settings says so until you choose the folder again or tap
+  `Documents/Kuch` again and Settings says so until you choose the folder again or tap
   **Use default folder**.
 
 ### Photos and videos of your own exercises
@@ -154,7 +154,7 @@ plays; the zip export opens the share sheet.
 - **Android:** Android Studio (bundles the SDK). Java 21 for Gradle.
 - **iOS:** a Mac with Xcode 15+ and CocoaPods (`brew install cocoapods`). A free Apple ID
   is enough to run the app on your own iPhone (see below); paid membership is only needed
-  for App Store distribution, which openGym doesn't do.
+  for App Store distribution, which Kuch doesn't do.
 
 ## Build & run
 
@@ -188,35 +188,21 @@ npx @capacitor/assets generate --iconBackgroundColor '#0c0e12' --splashBackgroun
 
 ## Distribution — deliberately no app stores
 
-openGym's mobile app is not on the Play Store or App Store, and that's a choice: no store
+Kuch's mobile app is not on the Play Store or App Store, and that's a choice: no store
 accounts, no store rules, no yearly fees between you and an open-source app.
 
 ### Android — sideload the APK
 
-The official signed APK is in four places, all the same file:
-
-- **[opengym.duarte-santos.ch](https://opengym.duarte-santos.ch)** — the download page.
-- **[GitLab's package registry](https://gitlab.com/DuarteSantos8/opengym/-/packages)** — every
-  build under `opengym-android/<version>/`, with a `.sha256` beside it. Direct link, no login:
-  `https://gitlab.com/api/v4/projects/85678327/packages/generic/opengym-android/<version>/openGym-<version>.apk`
-- **[The GitHub release](https://github.com/DuarteSantos8/openGym/releases)** for that version,
-  with the APK and its `.sha256` attached as release assets.
-- **[The GitLab release](https://gitlab.com/DuarteSantos8/opengym/-/releases)** on the mirror,
-  where the file is built; it links to the package registry above.
+A signed APK, when one is published, is attached to
+**[the GitHub release](https://github.com/alikulovuzz/kuch/releases)** for that version, with its
+`.sha256` beside it.
 
 Android asks you to allow installs from the browser the first time — that's standard for any
 app outside the Play Store. Check the `.sha256` if you got the file from anywhere else.
 
-Both come out of upstream's CI: the `build:apk` job in upstream's `.gitlab-ci.yml` (not part of this fork) runs
-`npm run build:mobile` and `./gradlew assembleRelease`, then `zipalign`s and signs the result
-with the release key. The job runs on every push to `main` too, so the newest unreleased
-build is always one click away (signed with the same key, installs over a release):
-`https://gitlab.com/DuarteSantos8/opengym/-/jobs/artifacts/main/browse?job=build:apk`
-— a 30-day job artifact, not a package, and not what the in-app updater offers. The key lives in *protected* CI variables (`ANDROID_KEYSTORE_B64`,
-`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`), so it only exists on `main` and on `v*`
-tags — a merge request from a fork can build an APK, but gets an unsigned one and never sees
-the key. On a `v*` tag the signed APK is also pushed to the generic package registry, which is
-what the release links to.
+Kuch has no APK build pipeline of its own yet: openGym's signed builds came from a `build:apk`
+job in its GitLab CI, which this fork does not run. Until there is one, build and sign the APK
+yourself as shown below.
 
 The release APK carries native code for ARM only (`arm64-v8a`, `armeabi-v7a`), which is every
 phone; the x86 builds of the barcode scanner's library would add about 12 MB for emulators
@@ -231,11 +217,11 @@ cd android && ./gradlew assembleRelease            # → app/build/outputs/apk/r
 
 # one-time: create a keystore. KEEP IT — updates must be signed with the same key,
 # or Android refuses to install the new version over the old one.
-keytool -genkeypair -keystore my.keystore -alias opengym -keyalg RSA -validity 10950
+keytool -genkeypair -keystore my.keystore -alias kuch -keyalg RSA -validity 10950
 
 # align + sign (zipalign/apksigner ship with the Android SDK build-tools)
 zipalign -f -p 4 app-release-unsigned.apk aligned.apk
-apksigner sign --ks my.keystore --ks-key-alias opengym --out openGym.apk aligned.apk
+apksigner sign --ks my.keystore --ks-key-alias kuch --out kuch.apk aligned.apk
 ```
 
 ### iPhone — what's actually possible
@@ -270,7 +256,7 @@ membership, the distribution certificate and profile as protected file variables
   reads `version` out of it), so the two drifting apart shows up as a misnamed file.
 - Tagging `vX.Y.Z` is what ships everything: images, APK, release notes. Don't push a version
   tag you don't mean to release — `v*` tags are protected for that reason.
-- **License:** openGym is AGPL-3.0, which by itself sits badly with app-store terms of
+- **License:** Kuch is AGPL-3.0, which by itself sits badly with app-store terms of
   service. `NOTICE.md` carries an app-store exception (an additional permission under
   AGPL §7) granted by the copyright holder — relevant only if store distribution ever happens.
 - The app requests notification permission when the workout-day reminder is switched on,

@@ -1,10 +1,10 @@
-# Self-hosting openGym on Kubernetes
+# Self-hosting Kuch on Kubernetes
 
 Example manifests for a small cluster, contributed from a K3s setup with the Gateway API and
 cert-manager. Read [SELF_HOSTING.md](SELF_HOSTING.md) first: the passkey requirement (HTTPS,
 `RP_ID`, `ORIGIN`), the settings in `.env.example` and the backup advice apply here unchanged.
 
-openGym is pretty simple — a frontend and an API backend. The API keeps everything in plain JSON
+Kuch is pretty simple — a frontend and an API backend. The API keeps everything in plain JSON
 files on a volume. The Docker Compose file also has a third container that downloads the exercise
 media once; here that is an initContainer. There are only a few resources to create:
 
@@ -17,8 +17,8 @@ media once; here that is an initContainer. There are only a few resources to cre
   works as well), plus a cert-manager Certificate for the hostname.
 
 ```bash
-git clone https://github.com/DuarteSantos8/openGym   # or https://gitlab.com/DuarteSantos8/opengym — same repo
-cd openGym
+git clone https://github.com/alikulovuzz/kuch
+cd kuch
 # In kubernetes/deployment.yaml, set RP_ID and ORIGIN in spec.template.spec.containers[api].env
 # to your hostname, and the hostname in kubernetes/httproute.yaml.
 kubectl apply -k kubernetes/

@@ -1,4 +1,4 @@
-# openGym documentation
+# Kuch documentation
 
 Pick the part that matches what you're doing. If you just have a question, try the
 [FAQ](FAQ.md) first.
@@ -11,9 +11,6 @@ Pick the part that matches what you're doing. If you just have a question, try t
 | [Phone app](MOBILE.md) | You want the Android APK or the iPhone options, or to connect the app to your own server |
 | [Importing data](DATA_IMPORTS.md) | You're coming from FitNotes, Strong, Hevy or Apple Health, or sharing a plan with someone |
 | [AI coach](AI_COACH.md) | Your instance has the coach switched on and you want to know what it sees and can change |
-
-The [live demo](https://opengym.duarte-santos.ch/demo/) is the real app with example data, nothing
-to install.
 
 ## Hosting it
 
@@ -50,5 +47,5 @@ Design notes for specific features, kept next to the code they describe:
 ## Still stuck?
 
 Ask on the [Discord](https://discord.gg/e62jY6fwVb) or in
-[Discussions](https://github.com/DuarteSantos8/openGym/discussions). If something in these docs was
+[Discussions](https://github.com/alikulovuzz/kuch/discussions). If something in these docs was
 wrong or missing, that's worth an issue too.

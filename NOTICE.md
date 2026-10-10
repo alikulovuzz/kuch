@@ -2,6 +2,7 @@
 
 openGym — Copyright (C) 2026 Duarte Santos.
 openGym's own code is licensed under the **GNU AGPL v3.0** (see [LICENSE](LICENSE)).
+Kuch is a fork of openGym by Duarte Santos (AGPL-3.0); its changes are licensed the same way.
 
 ## App store exception
 
@@ -46,13 +47,13 @@ SOFTWARE.
 
 ## Exercise data & media
 
-openGym obtains both through
+Kuch obtains both through
 [**hasaneyldrm/exercises-dataset**](https://github.com/hasaneyldrm/exercises-dataset), which
-licenses them differently. Neither is covered by openGym's AGPL license.
+licenses them differently. Neither is covered by Kuch's AGPL license.
 
 That dataset is itself a redistribution: the content originates from
-[**ExerciseDB v1**](https://exercisedb.dev/) by **AscendAPI**. This is verifiable from openGym's
-own data — the stored media filenames embed ExerciseDB's `exerciseId` (openGym's `0001` is
+[**ExerciseDB v1**](https://exercisedb.dev/) by **AscendAPI**. This is verifiable from Kuch's
+own data — the stored media filenames embed ExerciseDB's `exerciseId` (Kuch's `0001` is
 `0001-2gPfomN.jpg`; `2gPfomN` is ExerciseDB's id for "3/4 sit-up"), every metadata field matches,
 and the instruction sentences are identical apart from stripped `Step:N ` prefixes. See
 [issue #5](https://github.com/hasaneyldrm/exercises-dataset/issues/5) on that dataset.
@@ -61,9 +62,9 @@ and the instruction sentences are identical apart from stripped `Step:N ` prefix
 
 The exercise names, attributes and instructions (English in `frontend/src/lib/exercises-data.js`,
 other languages in `frontend/src/instr/`, regenerated via `scripts/build-instructions.mjs`)
-originate from ExerciseDB v1 and reach openGym through the dataset above, which distributes them
+originate from ExerciseDB v1 and reach Kuch through the dataset above, which distributes them
 under the MIT license reproduced below. The translations into languages other than English are
-openGym's own derivative work and are covered by openGym's AGPL.
+Kuch's own derivative work and are covered by Kuch's AGPL.
 
 ```
 MIT License
@@ -92,7 +93,7 @@ SOFTWARE.
 ### Images & animations — third-party, not MIT and not AGPL
 
 The exercise thumbnails (180×180) and animations are **not** covered by the MIT license above and
-**not** by openGym's AGPL. Their ownership is currently **unresolved**, and openGym states this
+**not** by Kuch's AGPL. Their ownership is currently **unresolved**, and Kuch states this
 plainly rather than guessing:
 
 - The upstream dataset attributes them to **© [Gym visual](https://gymvisual.com/)**, redistributed
@@ -106,14 +107,14 @@ plainly rather than guessing:
 These two claims contradict each other. A clarification has been requested from AscendAPI; this
 notice will be updated once the provenance is settled.
 
-**Until then, treat the media as third-party content licensed to neither openGym nor to you.**
+**Until then, treat the media as third-party content licensed to neither Kuch nor to you.**
 
-**openGym does not redistribute it.** It is not in this repository, not in its history, and not in
+**Kuch does not redistribute it.** It is not in this repository, not in its history, and not in
 the published container images or the Android APK. A self-hosted instance downloads it from the
 upstream source on first `docker compose up`; the mobile and demo builds load it from a CDN at
 runtime.
 
-If you want to reuse the media — in openGym or anywhere else, commercially or not — **clear it with
+If you want to reuse the media — in Kuch or anywhere else, commercially or not — **clear it with
 the rights holder first**, and keep any attribution that accompanies it intact.
 
 Brazilian Portuguese exercise instructions under
@@ -128,13 +129,13 @@ the source files.
 
 The gym check-in feature (a saved membership code shown as a QR code on the phone, added by
 typing, importing a photo, or scanning with the camera) uses three third-party packages. All are
-permissively licensed and compatible with openGym's AGPL, and all load on demand: the QR renderer
+permissively licensed and compatible with Kuch's AGPL, and all load on demand: the QR renderer
 and the browser decoder only when a card is shown or scanned, the ML Kit plugin only in the
 Android/iOS app.
 
 ### QR/barcode rendering — `lean-qr`
 
-openGym renders each saved code on the phone with [**lean-qr**](https://github.com/davidje13/lean-qr)
+Kuch renders each saved code on the phone with [**lean-qr**](https://github.com/davidje13/lean-qr)
 by David Evans, used under the **MIT License** and reproduced below. Only the code's stored value
 is kept; the picture is generated fresh from that value each time it is shown, never stored.
 It runs the same way in the app and in the browser/PWA.
@@ -176,6 +177,6 @@ Video frames are decoded in memory and never uploaded or stored.
 In the Android/iOS app, reading a code — from the camera or from an imported photo — uses the
 [**@capacitor-mlkit/barcode-scanning**](https://github.com/capawesome-team/capacitor-mlkit) plugin
 by the Capawesome Team (Robin Genz), a Capacitor wrapper around Google's ML Kit, used under the
-**Apache License 2.0**. openGym pins the `7.x` line to stay on Capacitor 7. The full license text is
+**Apache License 2.0**. Kuch pins the `7.x` line to stay on Capacitor 7. The full license text is
 available at <https://www.apache.org/licenses/LICENSE-2.0> and in the package's own `LICENSE` file.
-The decoded string is what openGym keeps; the photo itself is never stored.
+The decoded string is what Kuch keeps; the photo itself is never stored.

@@ -1,6 +1,6 @@
 # Security policy
 
-openGym is a self-hosted app: you run the server, you hold the data. This file says which
+Kuch is a self-hosted app: you run the server, you hold the data. This file says which
 versions get fixes, how to report something privately, and — the part most people actually
 need — what the app protects you from and what it doesn't.
 
@@ -19,7 +19,7 @@ git pull && docker compose pull && docker compose up -d
 ## Reporting a vulnerability
 
 Use GitHub's private vulnerability reporting:
-<https://github.com/DuarteSantos8/openGym/security/advisories/new>. The report is visible only to
+<https://github.com/alikulovuzz/kuch/security/advisories/new>. The report is visible only to
 you and the maintainer, and it becomes the advisory thread where the fix is discussed and, once
 released, published.
 
@@ -89,7 +89,7 @@ in the thread; there's no objection, and no request to sit on it indefinitely.
 
 ## Security model
 
-Read this before hosting openGym for anyone other than yourself.
+Read this before hosting Kuch for anyone other than yourself.
 
 ### What it does
 
@@ -213,7 +213,7 @@ Read this before hosting openGym for anyone other than yourself.
   subscriptions, invite codes), one `state-<uid>.json` per user with their complete workout
   history and body-weight log, `audit.log`, `secret`, and `vapid.json`. Anyone who can read that folder — you,
   whoever holds the backups, whoever gets into the host — can read every user's data, and with
-  `secret` can mint a valid session cookie for any account. **If you host openGym for other
+  `secret` can mint a valid session cookie for any account. **If you host Kuch for other
   people, they are trusting you exactly as much as they'd trust any server operator.** With the
   activity log on, `./data/audit.log` adds everyone's sign-in times to that — worth remembering
   before an archive of `./data` goes somewhere you don't run.
