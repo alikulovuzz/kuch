@@ -11,7 +11,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // flips the two gates (MOBILE flag, Capacitor platform) and watches whether Settings even
 // asks gitlab.com for the latest release.
 const mocks = vi.hoisted(() => {
-  const state = { S: null, MOBILE: false, android: false }
+  const state = { S: null, MOBILE: false, android: false, feed: null }
   state.snapshot = () => ({
     S: state.S,
     user: null,
@@ -51,6 +51,7 @@ vi.mock('../lib/mobile.js', () => ({
   shareExport: vi.fn(), syncReminder: vi.fn(),
 }))
 vi.mock('../lib/update.js', () => ({
+  get UPDATE_FEED() { return mocks.feed },
   checkForUpdate: (...a) => mocks.checkForUpdate(...a),
   downloadAndInstall: vi.fn(),
 }))
@@ -70,6 +71,8 @@ beforeEach(() => {
   }
   mocks.MOBILE = false
   mocks.android = false
+  // A stand-in feed: the shipped UPDATE_FEED is null (see the no-feed test below).
+  mocks.feed = { api: 'https://x/releases', page: 'https://x' }
   mocks.checkForUpdate.mockClear()
   mocks.confirmSheet.mockClear()
   host = document.createElement('div')
@@ -131,6 +134,20 @@ describe('Settings — in-app update check', () => {
     expect(mocks.checkForUpdate).toHaveBeenCalledTimes(2)
     await act(async () => { await Promise.resolve() })
     expect(updateRow()).toBeTruthy()   // the second (default) answer had 9.9.9 — the row now offers it
+  })
+
+  // Until the fork publishes its own signed releases there is no feed, and a row that can only
+  // ever answer "You have the latest version." is a dead end: it goes, and so does the footer
+  // that says releases are checked on gitlab.com.
+  it('Android with no release feed: no check, no row, no word about gitlab.com', async () => {
+    mocks.MOBILE = true
+    mocks.android = true
+    mocks.feed = null
+    await mount()
+    expect(mocks.checkForUpdate).not.toHaveBeenCalled()
+    expect(updateRow()).toBeUndefined()
+    expect(checkRow()).toBeUndefined()
+    expect(host.textContent).not.toContain('gitlab.com')
   })
 
   it('Android when gitlab.com is unreachable: stays quiet, keeps the row', async () => {
