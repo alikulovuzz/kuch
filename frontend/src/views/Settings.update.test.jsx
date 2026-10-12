@@ -9,7 +9,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // The updater downloads an .apk and hands it to the Android package installer, so its row
 // may only ever show on the native Android build: never on the web, never on iOS. Each test
 // flips the two gates (MOBILE flag, Capacitor platform) and watches whether Settings even
-// asks gitlab.com for the latest release.
+// asks GitHub for the latest release.
 const mocks = vi.hoisted(() => {
   const state = { S: null, MOBILE: false, android: false, feed: null }
   state.snapshot = () => ({
@@ -53,7 +53,7 @@ vi.mock('../lib/mobile.js', () => ({
 vi.mock('../lib/update.js', () => ({
   get UPDATE_FEED() { return mocks.feed },
   checkForUpdate: (...a) => mocks.checkForUpdate(...a),
-  downloadAndInstall: vi.fn(),
+  downloadAndInstall: vi.fn(), fetchChecksum: vi.fn(), openReleasesPage: vi.fn(),
 }))
 vi.mock('./MobileOnboarding.jsx', () => ({ ConnectSheet: () => null }))
 vi.mock('../sheets.jsx', () => ({
@@ -72,7 +72,7 @@ beforeEach(() => {
   mocks.MOBILE = false
   mocks.android = false
   // A stand-in feed: the shipped UPDATE_FEED is null (see the no-feed test below).
-  mocks.feed = { api: 'https://x/releases', page: 'https://x' }
+  mocks.feed = 'example-owner/example-app'
   mocks.checkForUpdate.mockClear()
   mocks.confirmSheet.mockClear()
   host = document.createElement('div')
@@ -138,8 +138,8 @@ describe('Settings — in-app update check', () => {
 
   // Until the fork publishes its own signed releases there is no feed, and a row that can only
   // ever answer "You have the latest version." is a dead end: it goes, and so does the footer
-  // that says releases are checked on gitlab.com.
-  it('Android with no release feed: no check, no row, no word about gitlab.com', async () => {
+  // that says releases are checked on GitHub.
+  it('Android with no release feed: no check, no row, no word about where releases are checked', async () => {
     mocks.MOBILE = true
     mocks.android = true
     mocks.feed = null
@@ -147,10 +147,10 @@ describe('Settings — in-app update check', () => {
     expect(mocks.checkForUpdate).not.toHaveBeenCalled()
     expect(updateRow()).toBeUndefined()
     expect(checkRow()).toBeUndefined()
-    expect(host.textContent).not.toContain('gitlab.com')
+    expect(host.textContent).not.toContain('Releases are checked on')
   })
 
-  it('Android when gitlab.com is unreachable: stays quiet, keeps the row', async () => {
+  it('Android when GitHub is unreachable: stays quiet, keeps the row', async () => {
     mocks.MOBILE = true
     mocks.android = true
     mocks.checkForUpdate.mockRejectedValueOnce(new Error('offline'))

@@ -489,10 +489,12 @@ const html = `<!DOCTYPE html>
 <meta name="twitter:title" content="Kuch API reference">
 <meta name="twitter:image" content="https://kuch.example.com/img/social.jpg">
 <link rel="canonical" href="https://kuch.example.com/api.html">
-<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
-<link rel="icon" type="image/png" sizes="180x180" href="icon-180.png">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" type="image/png" sizes="96x96" href="/icon-96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="styles.css?v=24">
+<link rel="stylesheet" href="styles.css?v=26">
 <script>document.documentElement.className += ' js'</script>
 <style>${css}</style>
 </head>
@@ -617,7 +619,7 @@ ${schemaCards}
   </div>
 </div></footer>
 
-<script src="site.js?v=24" defer></script>
+<script src="site.js?v=26" defer></script>
 <script>${js}</script>
 </body>
 </html>
