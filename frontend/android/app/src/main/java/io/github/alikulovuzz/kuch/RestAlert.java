@@ -521,7 +521,7 @@ public final class RestAlert {
      * waits until the clip has been heard.
      */
     static void playNow(Context ctx, String tone) {
-        new Thread(() -> playSound(ctx, tone), "opengym-tone").start();
+        new Thread(() -> playSound(ctx, tone), "kuch-tone").start();
     }
 
     private static void playSound(Context ctx, String tone) {
@@ -573,17 +573,17 @@ public final class RestAlert {
             // modes) and the tone was then silently skipped: stream the same clip instead.
             boolean streaming = false;
             if (track.getState() != AudioTrack.STATE_INITIALIZED) {
-                Log.w("openGym", "rest tone: static track refused, streaming it");
+                Log.w("Kuch", "rest tone: static track refused, streaming it");
                 track.release();
                 track = buildTrack(attrs, Math.max(min * 2, 8192), AudioTrack.MODE_STREAM);
                 streaming = true;
             }
             // Each way out says why in logcat: a rest tone that never plays is otherwise silent twice.
-            if (track.getState() != AudioTrack.STATE_INITIALIZED) { Log.w("openGym", "rest tone: track not initialized"); return; }
+            if (track.getState() != AudioTrack.STATE_INITIALIZED) { Log.w("Kuch", "rest tone: track not initialized"); return; }
             int frames = samples.length;
             if (!streaming) {
                 frames = track.write(samples, 0, samples.length);
-                if (frames <= 0) { Log.w("openGym", "rest tone: write returned " + frames); return; }
+                if (frames <= 0) { Log.w("Kuch", "rest tone: write returned " + frames); return; }
             }
             track.setVolume(1f);
             am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
@@ -594,7 +594,7 @@ public final class RestAlert {
             // A streaming track is fed after play(); write() blocks until the mixer has room.
             if (streaming) {
                 int written = track.write(samples, 0, samples.length);
-                if (written <= 0) { Log.w("openGym", "rest tone: stream write returned " + written); return; }
+                if (written <= 0) { Log.w("Kuch", "rest tone: stream write returned " + written); return; }
             }
             long clipMs = frames * 1000L / RATE;
             long deadline = System.currentTimeMillis() + clipMs + 3000;
@@ -606,7 +606,7 @@ public final class RestAlert {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
-            Log.w("openGym", "rest tone failed", e);   // the notification still posted
+            Log.w("Kuch", "rest tone failed", e);   // the notification still posted
         }
         finally {
             if (track != null) {

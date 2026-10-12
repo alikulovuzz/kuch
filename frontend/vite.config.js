@@ -17,7 +17,7 @@ const apiOrigin = process.env.API_ORIGIN || 'http://localhost:8080'
 // proxied to a server of your choice with MEDIA_TARGET.
 const media = process.env.MEDIA_TARGET
 const catalogueMedia = {
-  name: 'opengym-catalogue-media',
+  name: 'kuch-catalogue-media',
   configureServer(server) {
     if (media) return
     const dirs = { '/exercise-media/still/': ['still', '.webp'], '/exercise-media/clip/': ['clip', '.mp4'] }
