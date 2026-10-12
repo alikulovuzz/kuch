@@ -837,7 +837,7 @@ export default function Settings({ page = null, find = null, via = null }) {
         <a href="https://github.com/alikulovuzz/kuch" target="_blank" rel="noopener">{t('Source code')}</a><br />
         {/* Attribution the media licence asks for word for word (agreement §8c), so it is not translated */}
         Exercise media © Aliaksandr Makatserchyk, <a href="https://gymvisual.com/" target="_blank" rel="noopener">Gym visual</a>, gymvisual.com.
-        Media licensed for use in openGym only; see <a href="https://github.com/alikulovuzz/kuch/blob/main/NOTICE.md" target="_blank" rel="noopener">NOTICE.md</a>
+        Media licensed for use in openGym only, carried by Kuch as a non-commercial fork; see <a href="https://github.com/alikulovuzz/kuch/blob/main/NOTICE.md" target="_blank" rel="noopener">NOTICE.md</a>
       </div>
     </>,
 

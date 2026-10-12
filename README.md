@@ -331,8 +331,10 @@ copyright and license; see [NOTICE.md](NOTICE.md).
 > [!IMPORTANT]
 > **The exercise media is not covered by that license.** The stills and animations are
 > © Aliaksandr Makatserchyk, [Gym visual](https://gymvisual.com/), licensed for use in openGym only:
-> 180 px in this repository and on self-hosted servers, larger only inside the app packages. A
+> 180 px in the repository and on self-hosted servers, larger only inside openGym's app packages. A
 > non-commercial fork may keep them unmodified with the notice; anything else needs your own licence
-> from gymvisual.com. The exercise text in `catalogue/` is openGym's and open to contributions.
+> from gymvisual.com. Kuch is such a non-commercial fork: it carries the unmodified 180 px files
+> under that permission, and would need its own licence from gymvisual.com before becoming
+> commercial. The exercise text in `catalogue/` is openGym's and open to contributions.
 
 Full third-party notices, including the body-diagram geometry, are in [NOTICE.md](NOTICE.md).

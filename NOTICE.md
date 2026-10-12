@@ -64,6 +64,10 @@ What that means in practice:
 - The media may not be used to train, prompt or feed any AI system, or as a basis for generated
   images, animations or video.
 
+Kuch is a non-commercial fork of openGym and carries these media unmodified under the fork
+permission above. If Kuch ever becomes commercial, it needs its own licence from
+[gymvisual.com](https://gymvisual.com/) first.
+
 ## Exercise text (names, muscles, descriptions, instructions)
 
 The catalogue in `catalogue/` is openGym's own and is edited by its community (see

@@ -98,7 +98,8 @@ an exercise and something measured. See [DATA_IMPORTS.md](DATA_IMPORTS.md).
 
 No. They are © Aliaksandr Makatserchyk, Gym visual, licensed for use in openGym only and not covered
 by openGym's license. Anything outside openGym needs your own licence from
-[gymvisual.com](https://gymvisual.com/). Details in [NOTICE.md](../NOTICE.md). The exercise text in
+[gymvisual.com](https://gymvisual.com/). Kuch carries them unmodified at 180 px as a non-commercial
+fork of openGym, under the fork permission in [NOTICE.md](../NOTICE.md). The exercise text in
 [catalogue/](../catalogue/README.md) is a different story: that's openGym's, and fixes are welcome.
 
 ### Where do I ask something that isn't here?

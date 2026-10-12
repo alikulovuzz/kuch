@@ -40,8 +40,9 @@ cd mcp && npm test
   State lives in the Zustand store (`src/store`), pure helpers in `src/lib`. There is no linter or
   formatter config, so follow the surrounding code.
 - **Don't commit** `data/`; it is gitignored. Don't add or replace anything in
-  `catalogue/media/`: the stills and animations are licensed from Gym visual, 180 px at most, and
-  not open to contributions (see [NOTICE.md](NOTICE.md)).
+  `catalogue/media/`: the stills and animations are licensed to openGym by Gym visual, and Kuch
+  carries them unmodified as a non-commercial fork. They stay 180 px at most and are not open to
+  contributions (see [NOTICE.md](NOTICE.md)).
 - **Exercise fixes and translations go through `catalogue/`**, one JSON file per exercise and one
   per language. [catalogue/README.md](catalogue/README.md) explains the fields and how the app is
   built from them; don't edit the generated `frontend/src/lib/exercises-data.js` by hand.

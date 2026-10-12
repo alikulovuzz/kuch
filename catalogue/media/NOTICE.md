@@ -7,3 +7,7 @@ and are **not** covered by openGym's AGPL.
 
 They are 180×180 px at most. Don't copy them out of openGym, hotlink them or feed them to any AI
 system. See [NOTICE.md](../../NOTICE.md) for the full picture.
+
+Kuch is a non-commercial fork of openGym and carries these media unmodified under the fork
+permission in [NOTICE.md](../../NOTICE.md). If Kuch ever becomes commercial, it needs its own
+licence from gymvisual.com first.
