@@ -145,7 +145,7 @@ server {
     # The exercise stills and animations, licensed from Gym visual for openGym only (NOTICE.md).
     # Cross-Origin-Resource-Policy keeps another site from showing them in its own pages: the
     # browser refuses a cross-origin <img> or <video> of them. The app loads them same-origin
-    # (the mobile app ships its own copy), so nothing of openGym's is affected. `^~` so this
+    # (the mobile app ships its own copy), so nothing of Kuch's is affected. `^~` so this
     # prefix beats the image regex below; that one's caching is repeated in the nested block,
     # and so are the headers, since an add_header replaces the inherited set (see the top).
     location ^~ ${BASE_PATH}/exercise-media/ {

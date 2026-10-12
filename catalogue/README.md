@@ -1,6 +1,6 @@
 # The exercise catalogue
 
-Every exercise openGym knows lives here, one file each, in plain JSON. The app is built from these
+Every exercise Kuch knows lives here, one file each, in plain JSON. The app is built from these
 files, so a fix merged here is in the next release for everyone.
 
 - **Browse the list:** [browse/](browse/README.md), one page per body part, each exercise with a link to its picture.
