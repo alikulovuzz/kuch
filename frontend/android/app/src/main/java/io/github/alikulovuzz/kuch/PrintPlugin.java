@@ -1,4 +1,4 @@
-package ch.duartesantos.opengym;
+package io.github.alikulovuzz.kuch;
 
 import android.content.Context;
 import android.print.PrintAttributes;
@@ -37,7 +37,7 @@ public class PrintPlugin extends Plugin {
             call.reject("html is required");
             return;
         }
-        final String jobName = call.getString("name", "openGym");
+        final String jobName = call.getString("name", "Kuch");
 
         getActivity().runOnUiThread(() -> {
             WebView webView = new WebView(getContext());

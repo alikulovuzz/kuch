@@ -1,4 +1,4 @@
-package ch.duartesantos.opengym;
+package io.github.alikulovuzz.kuch;
 
 import android.app.AlarmManager;
 import android.app.Notification;
@@ -27,13 +27,13 @@ import android.util.Log;
  * the user also allows notifications there.
  */
 public final class RestAlert {
-    static final String ACTION = "ch.duartesantos.opengym.action.REST_OVER";
-    static final String ACTION_PAUSE = "ch.duartesantos.opengym.rest.PAUSE";
-    static final String ACTION_MINUS = "ch.duartesantos.opengym.rest.MINUS";
-    static final String ACTION_PLUS = "ch.duartesantos.opengym.rest.PLUS";
-    static final String ACTION_SKIP = "ch.duartesantos.opengym.rest.SKIP";
-    static final String ACTION_ACCENT = "ch.duartesantos.opengym.rest.ACCENT";
-    static final String ACTION_HOLD = "ch.duartesantos.opengym.rest.HOLD";
+    static final String ACTION = "io.github.alikulovuzz.kuch.action.REST_OVER";
+    static final String ACTION_PAUSE = "io.github.alikulovuzz.kuch.rest.PAUSE";
+    static final String ACTION_MINUS = "io.github.alikulovuzz.kuch.rest.MINUS";
+    static final String ACTION_PLUS = "io.github.alikulovuzz.kuch.rest.PLUS";
+    static final String ACTION_SKIP = "io.github.alikulovuzz.kuch.rest.SKIP";
+    static final String ACTION_ACCENT = "io.github.alikulovuzz.kuch.rest.ACCENT";
+    static final String ACTION_HOLD = "io.github.alikulovuzz.kuch.rest.HOLD";
     static final String CHANNEL_ID = "rest-over";
     /**
      * Settings → Vibrate off. Android keeps a channel's vibration as it was when the channel was
@@ -96,7 +96,7 @@ public final class RestAlert {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
             exact = false;
         }
-        if (!exact) Log.w("openGym", "exact alarms not allowed; the rest countdown sounds the end itself");
+        if (!exact) Log.w("Kuch", "exact alarms not allowed; the rest countdown sounds the end itself");
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             String posted = alarmBuzz ? QUIET_CHANNEL_ID : channelId;
@@ -149,7 +149,7 @@ public final class RestAlert {
         intent.putExtra("alarmBuzz", lastAlarmBuzz);
         intent.putExtra("channelId", lastChannel);
         intent.putExtra("at", at);
-        new Thread(() -> fire(ctx, intent), "opengym-rest").start();
+        new Thread(() -> fire(ctx, intent), "kuch-rest").start();
     }
 
     /** One alert per end: the countdown and an exact alarm reach the same end in the same instant. */
@@ -165,7 +165,7 @@ public final class RestAlert {
         PowerManager.WakeLock cpu = null;
         try {
             PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
-            cpu = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "opengym:rest");
+            cpu = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kuch:rest");
             cpu.acquire(10_000);
         } catch (Exception ignored) { /* tone still attempts without the lock */ }
         try {
@@ -216,7 +216,7 @@ public final class RestAlert {
             PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
             PowerManager.WakeLock screen = pm.newWakeLock(
                     PowerManager.SCREEN_DIM_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                    "opengym:rest-screen");
+                    "kuch:rest-screen");
             screen.acquire(3000);
         } catch (Exception ignored) { /* */ }
     }
@@ -394,7 +394,7 @@ public final class RestAlert {
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i);
             else ctx.startService(i);
         } catch (Exception e) {
-            Log.w("openGym", "rest countdown not started", e);
+            Log.w("Kuch", "rest countdown not started", e);
         }
     }
 

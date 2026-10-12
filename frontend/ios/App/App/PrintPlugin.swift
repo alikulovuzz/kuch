@@ -21,7 +21,7 @@ public class PrintPlugin: CAPPlugin {
             call.reject("html is required")
             return
         }
-        let jobName = call.getString("name") ?? "openGym"
+        let jobName = call.getString("name") ?? "Kuch"
 
         DispatchQueue.main.async {
             let controller = UIPrintInteractionController.shared
