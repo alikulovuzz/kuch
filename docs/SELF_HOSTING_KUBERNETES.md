@@ -42,9 +42,9 @@ Notes:
 - The images are pinned to a release (`1.4.1`), the API and the web image always to the same
   one. To update, read the release notes, set the new version on both and apply again; pinning
   to `latest` instead means a restarted pod can come back on a version you never chose.
-- Coming from a version before 1.4.0: the `media-download` initContainer and the `opengym-media`
+- Coming from a version before 1.4.0: the `media-download` initContainer and the `kuch-media`
   PVC are gone, since the media now ship in the web image. Once the new pod runs, delete the old
-  claim with `kubectl delete pvc opengym-media -n fitness` (`kubectl apply -k` leaves it in place).
+  claim with `kubectl delete pvc kuch-media -n fitness` (`kubectl apply -k` leaves it in place).
 - Settings are environment variables on the `api` container, named as in `.env.example`. Keep
   secrets such as the push keys in a Kubernetes Secret and load them with `envFrom`.
 - **Client addresses.** The web container overwrites `X-Forwarded-For` with the address it was

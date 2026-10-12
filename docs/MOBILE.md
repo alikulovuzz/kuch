@@ -76,12 +76,12 @@ If your server sits behind [Cloudflare Access](https://developers.cloudflare.com
 
 1. In Zero Trust → Access → Service Auth, create a service token and note its Client ID and
    Client Secret.
-2. In the Access application for your openGym host, add a policy with the **Service Auth**
+2. In the Access application for your Kuch host, add a policy with the **Service Auth**
    action that includes that token.
 3. In the application's **CORS settings**, enable **Bypass OPTIONS requests to origin**. The
    app runs on its own origin, so every request is preceded by a CORS preflight, and a
    preflight never carries the token — without the bypass, Access refuses it and nothing
-   gets through. The openGym API answers the preflight itself and allows both headers.
+   gets through. The Kuch API answers the preflight itself and allows both headers.
 4. In the app, before connecting: first-launch screen → **Connection settings** (or the
    **Cloudflare Access** button in the Connect sheet), enter your server's address and the two
    values, then pair as usual. They can be changed later under Settings → **Server & sync** →
@@ -192,8 +192,8 @@ that.
   out rather than given made-up times. `src/lib/health-connect.js` works this out; its tests
   pin it.
 - **Write-only.** The manifest declares `WRITE_EXERCISE` and `WRITE_WEIGHT` and nothing else, and
-  openGym reads nothing back.
-- **No duplicates.** Every record carries openGym's own id as its `clientRecordId`
+  Kuch reads nothing back.
+- **No duplicates.** Every record carries Kuch's own id as its `clientRecordId`
   (`opengym-w-<workout id>`, `opengym-bw-<day>`), so writing it again replaces it. An edited workout
   or weigh-in is written again; a deleted one is removed from Health Connect.
 - **This phone only.** Whether it is on, and a fingerprint of each record already written, live in
@@ -203,7 +203,7 @@ that.
 - **When it writes:** after each save (finishing a workout, a weigh-in, an edit), when the app comes
   back to the foreground, and once at launch. While it is off, a save costs nothing: the file is
   read once at launch and kept in memory.
-- **Turning it off** asks whether to keep what openGym wrote in Health Connect, as the user's own
+- **Turning it off** asks whether to keep what Kuch wrote in Health Connect, as the user's own
   data, or to remove exactly those records.
 - **Where it shows:** Android 14 and later have Health Connect built in. On Android 9–13 it is an
   app of its own, and the card offers its store page until it is installed. Below Android 9 (the
@@ -216,7 +216,7 @@ that.
 
 Worth checking on a real device after changes here: turning it on shows Health Connect's own
 permission screen; a finished workout appears in Health Connect within a few seconds; deleting it
-in openGym removes it there; turning it off with "remove" leaves no openGym record behind.
+in Kuch removes it there; turning it off with "remove" leaves no Kuch record behind.
 
 ## Prerequisites
 
