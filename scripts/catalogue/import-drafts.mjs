@@ -2,7 +2,7 @@
 // Folds the v1.4.0 drafting work into catalogue/: the new exercises of the Gym visual pack and
 // descriptions for the ones that shipped before. One-off, kept for the record like import-legacy.
 //
-//   node scripts/catalogue/import-drafts.mjs /path/to/opengym-media
+//   node scripts/catalogue/import-drafts.mjs /path/to/media-pack
 //
 // Reads <archive>/work/drafts.json (ids, female drawings) and <archive>/work/meta/out/*.json (the
 // text, checked against work/meta/SPEC.md). Existing entries only ever gain a description and a
@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const EX = path.join(ROOT, 'catalogue/exercises')
-const archive = path.resolve(process.argv[2] || '/mnt/backup-hdd/opengym-media')
+if (!process.argv[2]) { console.error('usage: node scripts/catalogue/import-drafts.mjs /path/to/media-pack'); process.exit(1) }
+const archive = path.resolve(process.argv[2])
 const outDir = path.join(archive, 'work/meta/out')
 const { drafts, femaleVariants } = JSON.parse(fs.readFileSync(path.join(archive, 'work/drafts.json'), 'utf8'))
 

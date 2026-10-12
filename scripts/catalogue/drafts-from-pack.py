@@ -2,7 +2,7 @@
 """Lists the exercises of the Gym visual pack that the catalogue does not have yet, from the pack's
 FILE NAMES only (work/index.json), as work/drafts.json in the private archive:
 
-    python3 -I scripts/catalogue/drafts-from-pack.py /path/to/opengym-media
+    python3 -I scripts/catalogue/drafts-from-pack.py /path/to/media-pack
 
 Each draft carries the id, the drawing (male/female), a readable version of the file title and the
 pack's category word. A female drawing whose title matches a male one becomes that exercise's
