@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-openGym is a self-hosted gym & body-weight tracker PWA. Two containers (`api` + `web`) plus a
+Kuch is a self-hosted gym & body-weight tracker PWA, a fork of openGym. Two containers (`api` + `web`) plus a
 `./data` folder the user owns — no third-party account, no telemetry. Passkey (WebAuthn) login,
 installable as a home-screen app, optional Capacitor shells for standalone Android/iOS builds.
 License: AGPL-3.0-or-later.
@@ -55,13 +55,12 @@ cd frontend && npm run build:mobile   # + cap sync, points media at the CDN data
 There is no linter/formatter configured (no ESLint/Prettier config in the repo) and no
 TypeScript — match the existing style by hand.
 
-GitHub (`github.com/DuarteSantos8/openGym`) is the home of the project; `.github/workflows/mirror.yml`
-pushes `main` and `v*` tags to the GitLab mirror. Pull requests are gated by
+This fork (Kuch) lives on GitHub only (`github.com/alikulovuzz/kuch`). Upstream's GitLab mirror,
+GitLab/Gitea CI and Pages demo are not carried over. Pull requests are gated by
 `.github/workflows/test.yml` on Node 22 — the same version as `web/Dockerfile` / `api/Dockerfile`
 (`node:22-alpine`): the frontend, api and MCP suites, the locale checks, and building and booting
-both api image targets. GitLab CI on the mirror (`.gitlab-ci.yml`) builds the release artifacts:
-the signed Android APK, the multi-arch images and the SBOMs. Never push or merge on GitLab
-directly; the mirror is fast-forward only.
+both api image targets. `.github/workflows/docker-publish.yml` publishes the multi-arch images to
+`ghcr.io/alikulovuzz/kuch-{api,web}`.
 
 ## Architecture
 

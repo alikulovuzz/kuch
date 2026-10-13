@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://opengym.ch/</loc>
-    <lastmod>2026-10-10</lastmod>
+    <loc>https://kuch.example.com/</loc>
+    <lastmod>2026-10-07</lastmod>
   </url>
   <url>
-    <loc>https://opengym.ch/docs.html</loc>
-    <lastmod>2026-10-10</lastmod>
+    <loc>https://kuch.example.com/docs.html</loc>
+    <lastmod>2026-10-07</lastmod>
   </url>
   <url>
-    <loc>https://opengym.ch/about.html</loc>
-    <lastmod>2026-10-10</lastmod>
+    <loc>https://kuch.example.com/about.html</loc>
+    <lastmod>2026-10-07</lastmod>
   </url>
   <url>
-    <loc>https://opengym.ch/api.html</loc>
-    <lastmod>2026-10-10</lastmod>
+    <loc>https://kuch.example.com/api.html</loc>
+    <lastmod>2026-10-07</lastmod>
   </url>
 </urlset>

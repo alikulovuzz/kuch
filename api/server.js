@@ -1,4 +1,4 @@
-/* opengym-api — passkey (WebAuthn) auth + per-user state storage for openGym
+/* kuch-api — passkey (WebAuthn) auth + per-user state storage for Kuch
    No framework, JSON-file storage, signed session cookies.               */
 import http from 'node:http';
 import crypto from 'node:crypto';
@@ -40,7 +40,7 @@ const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
 const RP_ID = process.env.RP_ID || 'localhost';
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8080';
-const RP_NAME = process.env.RP_NAME || 'openGym';
+const RP_NAME = process.env.RP_NAME || 'Kuch';
 // Admin dashboard (issue): admins are matched by uid (or the admin flag FIRST_USER_ADMIN sets);
 // INVITE_ONLY gates new signups behind a code the admin generates. Off by default, so a fresh
 // self-hosted instance stays open.
@@ -2706,4 +2706,4 @@ server.headersTimeout = 60000;
 // port that was actually bound: with PORT=0 the OS picks one, and a caller that did not choose it
 // (the tests spawn the server that way, and so does anyone running two instances on one box) has
 // no other way to learn it.
-server.listen(PORT, () => console.log(`gym-api on :${server.address().port} (rpID=${RP_ID}, origin=${ORIGIN})`));
+server.listen(PORT, () => console.log(`kuch-api on :${server.address().port} (rpID=${RP_ID}, origin=${ORIGIN})`));

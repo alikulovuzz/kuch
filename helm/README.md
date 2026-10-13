@@ -1,6 +1,6 @@
-# openGym Helm chart
+# Kuch Helm chart
 
-Installs openGym on Kubernetes: the API and the web container in a single pod, a PVC for the data, a
+Installs Kuch on Kubernetes: the API and the web container in a single pod, a PVC for the data, a
 Service, and optionally an Ingress or a Gateway API HTTPRoute with a cert-manager certificate. It
 deploys the same thing as the plain manifests in [`kubernetes/`](../kubernetes), but lets you set
 everything from values.
@@ -13,10 +13,10 @@ Read [docs/SELF_HOSTING.md](../docs/SELF_HOSTING.md) first. The passkey requirem
 ## Install
 
 ```bash
-git clone https://github.com/DuarteSantos8/openGym
-cd openGym
+git clone https://github.com/alikulovuzz/kuch
+cd kuch
 
-helm install opengym ./helm -n fitness --create-namespace \
+helm install kuch ./helm -n fitness --create-namespace \
   --set api.env.RP_ID=gym.example.com \
   --set api.env.ORIGIN=https://gym.example.com \
   --set ingress.enabled=true \
@@ -28,9 +28,9 @@ helm install opengym ./helm -n fitness --create-namespace \
 For anything more than a quick test, put your settings in a values file:
 
 ```bash
-helm install opengym ./helm -n fitness --create-namespace -f my-values.yaml
-helm upgrade opengym ./helm -n fitness -f my-values.yaml
-helm test opengym -n fitness          # calls /api/health through the web container
+helm install kuch ./helm -n fitness --create-namespace -f my-values.yaml
+helm upgrade kuch ./helm -n fitness -f my-values.yaml
+helm test kuch -n fitness          # calls /api/health through the web container
 ```
 
 Pods restart on their own when the ConfigMap or Secret changes.
@@ -55,7 +55,7 @@ ingress:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: opengym-tls
+    - secretName: kuch-tls
       hosts:
         - gym.example.com
 ```
@@ -76,7 +76,7 @@ httpRoute:
 
 certificate:
   enabled: true
-  secretName: opengym-tls
+  secretName: kuch-tls
   issuerRef:
     kind: ClusterIssuer
     name: letsencrypt
@@ -90,8 +90,8 @@ certificate:
 ### Neither (local test)
 
 ```bash
-helm install opengym ./helm --set api.env.RP_ID=localhost --set api.env.ORIGIN=http://localhost:8080
-kubectl port-forward svc/opengym 8080:80
+helm install kuch ./helm --set api.env.RP_ID=localhost --set api.env.ORIGIN=http://localhost:8080
+kubectl port-forward svc/kuch 8080:80
 ```
 
 Browsers allow passkeys over plain `http://` only on `localhost`.
@@ -123,7 +123,7 @@ The chart keeps the PVC on `helm uninstall` (`helm.sh/resource-policy: keep`). T
 the data, delete it by hand.
 
 The exercise stills and animations are part of the web image, so there is no media volume. Charts
-before openGym 1.4.0 created a `<release>-media` PVC for a download; after upgrading it is no
+before 1.4.0 created a `<release>-media` PVC for a download; after upgrading it is no
 longer mounted, and since Helm keeps it, delete it by hand once the new pod runs.
 
 ### Images
@@ -146,16 +146,16 @@ a second writer to the same files.
 ## Moving from `kubectl apply -k kubernetes/`
 
 Helm refuses to take over resources it didn't create. Remove the old Deployment, Service,
-HTTPRoute, Certificate and ReferenceGrant, but **keep the `opengym-data` PVC**: deleting it deletes
+HTTPRoute, Certificate and ReferenceGrant, but **keep the `kuch-data` PVC**: deleting it deletes
 the data. Point the chart at the existing claim instead:
 
 ```bash
-kubectl -n fitness delete deployment/opengym service/opengym httproute/opengym \
-  certificate/opengym-tls referencegrant/allow-gateway
-helm install opengym ./helm -n fitness -f my-values.yaml \
-  --set persistence.data.existingClaim=opengym-data
+kubectl -n fitness delete deployment/kuch service/kuch httproute/kuch \
+  certificate/kuch-tls referencegrant/allow-gateway
+helm install kuch ./helm -n fitness -f my-values.yaml \
+  --set persistence.data.existingClaim=kuch-data
 ```
 
-The old `opengym-media` claim is not needed any more; delete it after the move.
+The old `kuch-media` claim is not needed any more; delete it after the move.
 
 The site is unreachable between the delete and the moment the new pod is ready.

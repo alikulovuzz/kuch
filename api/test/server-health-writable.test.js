@@ -38,7 +38,7 @@ async function startServer(t, dataDir) {
   // The boot line, not a health poll: the poll is what is under test here.
   const port = await new Promise((resolve, reject) => {
     const give = setTimeout(() => reject(new Error(`server never announced a port:\n${log}`)), 20000);
-    child.stdout.on('data', d => { log += d; const m = /gym-api on :(\d+)/.exec(log); if (m) { clearTimeout(give); resolve(+m[1]); } });
+    child.stdout.on('data', d => { log += d; const m = /kuch-api on :(\d+)/.exec(log); if (m) { clearTimeout(give); resolve(+m[1]); } });
     child.stderr.on('data', d => { log += d; });
     child.on('exit', c => { clearTimeout(give); reject(new Error(`server exited (${c}):\n${log}`)); });
   });

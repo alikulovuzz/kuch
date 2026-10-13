@@ -1,5 +1,5 @@
 // Tests for mcp/src/state.js — the uid/config resolution and what a read failure looks like.
-// state.js reads OPENGYM_DATA at module load and caches module-globally, so each case stubs the
+// state.js reads KUCH_DATA at module load and caches module-globally, so each case stubs the
 // env and imports a fresh copy. Temp dirs only; nothing here touches a real profile.
 import { describe, test, expect, afterEach, afterAll, vi } from 'vitest'
 import fs from 'node:fs'
@@ -33,8 +33,8 @@ function mk(files) {
 // A fresh state.js bound to `dir`.
 async function load(dir, uid = 'alex') {
   vi.resetModules()
-  vi.stubEnv('OPENGYM_DATA', dir)
-  vi.stubEnv('OPENGYM_UID', uid)
+  vi.stubEnv('KUCH_DATA', dir)
+  vi.stubEnv('KUCH_UID', uid)
   return import('../src/state.js')
 }
 
@@ -66,7 +66,7 @@ describe('a read failure is not "you never signed in"', () => {
     expect(err.message).toMatch(/cannot read state-alex\.json: EISDIR/)
   })
 
-  // Root reads a mode-000 file anyway (the GitLab CI container runs as root), so the failure this
+  // Root reads a mode-000 file anyway (a CI container may run as root), so the failure this
   // needs cannot be made there.
   const asRoot = typeof process.getuid === 'function' && process.getuid() === 0
   test.skipIf(asRoot)('a permission failure names the file, not the server\'s path', async () => {
@@ -91,6 +91,40 @@ describe('a read failure is not "you never signed in"', () => {
   })
 })
 
+describe('config: KUCH_DATA / KUCH_UID, with the upstream OPENGYM_* names as a fallback', () => {
+  const ALEX = JSON.stringify({ unit: 'lb' })
+  const SAM = JSON.stringify({ unit: 'kg' })
+  async function loadEnv(env) {
+    vi.resetModules()
+    for (const k of ['KUCH_DATA', 'KUCH_UID', 'OPENGYM_DATA', 'OPENGYM_UID']) vi.stubEnv(k, env[k] ?? '')
+    return import('../src/state.js')
+  }
+
+  test('KUCH_DATA and KUCH_UID pick the data dir and the profile', async () => {
+    const dir = mk({ 'db.json': DB_MANY, 'state-alex.json': ALEX, 'state-third-account.json': SAM })
+    const { getState } = await loadEnv({ KUCH_DATA: dir, KUCH_UID: 'alex' })
+    expect(getState().unit).toBe('lb')
+  })
+
+  test('an existing client config with only OPENGYM_DATA and OPENGYM_UID still reads its profile', async () => {
+    const dir = mk({ 'db.json': DB_MANY, 'state-alex.json': ALEX, 'state-third-account.json': SAM })
+    const { getState } = await loadEnv({ OPENGYM_DATA: dir, OPENGYM_UID: 'alex' })
+    expect(getState().unit).toBe('lb')
+  })
+
+  test('when both are set, the KUCH_* names win', async () => {
+    const kuch = mk({ 'db.json': DB_MANY, 'state-alex.json': ALEX, 'state-third-account.json': SAM })
+    const old = mk({ 'db.json': DB_MANY, 'state-alex.json': SAM, 'state-third-account.json': SAM })
+    const { getState } = await loadEnv({ KUCH_DATA: kuch, KUCH_UID: 'alex', OPENGYM_DATA: old, OPENGYM_UID: 'third-account' })
+    expect(getState().unit).toBe('lb')
+  })
+
+  test('a missing data dir is reported under the new name', async () => {
+    const { getState } = await loadEnv({ KUCH_DATA: path.join(os.tmpdir(), 'mcp-state-does-not-exist') })
+    expect(() => getState()).toThrow(/KUCH_DATA dir does not exist/)
+  })
+})
+
 describe('the "which profile?" error is a config message, not a roster', () => {
   const uids = ['alex', 'secret-partner-uid', 'third-account']
 
@@ -103,14 +137,14 @@ describe('the "which profile?" error is a config message, not a roster', () => {
       const logs = []
       const spy = vi.spyOn(console, 'error').mockImplementation((...a) => logs.push(a.join(' ')))
       const dir = mk(files)
-      const { getState } = await load(dir, '')       // no OPENGYM_UID pinned
+      const { getState } = await load(dir, '')       // no KUCH_UID pinned
       let err = null
       try { getState() } catch (e) { err = e }
       spy.mockRestore()
       expect(err).toBeTruthy()
       expect(err.code).toBe('EINVAL')
       expect(err.message).toMatch(/holds 3 profiles/)
-      expect(err.message).toMatch(/set OPENGYM_UID/)
+      expect(err.message).toMatch(/set KUCH_UID/)
       for (const u of uids) expect(err.message).not.toContain(u)
       expect(err.message).not.toContain(dir)
       expect(err.message).not.toContain('/')

@@ -1,4 +1,4 @@
-package ch.duartesantos.opengym;
+package io.github.alikulovuzz.kuch;
 
 import static org.junit.Assert.*;
 

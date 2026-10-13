@@ -1,4 +1,4 @@
-package ch.duartesantos.opengym;
+package io.github.alikulovuzz.kuch;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -17,6 +17,6 @@ public class RestAlertReceiver extends BroadcastReceiver {
             } finally {
                 pending.finish();
             }
-        }, "opengym-rest").start();
+        }, "kuch-rest").start();
     }
 }

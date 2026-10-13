@@ -167,7 +167,7 @@ const COMMON = new Set([
 const STEMS = new Set([
   'password', 'passwort', 'passw0rd', 'motdepasse', 'contrasena', 'contraseña', 'senha', 'parola',
   'haslo', 'wachtwoord', 'salasana', 'qwerty', 'qwertz', 'azerty', 'qwertyuiop', 'asdfgh',
-  'letmein', 'welcome', 'iloveyou', 'admin', 'administrator', 'changeme', 'opengym', 'gym',
+  'letmein', 'welcome', 'iloveyou', 'admin', 'administrator', 'changeme', 'opengym', 'kuch', 'gym',
   'workout', 'fitness', 'dragon', 'monkey', 'football', 'baseball', 'sunshine', 'princess',
   'superman', 'batman', 'master', 'shadow', 'trustno', 'abc', 'abcdef', 'secret', 'login'
 ]);

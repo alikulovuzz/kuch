@@ -2,19 +2,19 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: opengym
-  name: opengym
+    app: kuch
+  name: kuch
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: opengym
+      app: kuch
   template:
     metadata:
       labels:
-        app: opengym
+        app: kuch
     spec:
       containers:
         - name: api
@@ -22,7 +22,7 @@ spec:
           # what you roll back to, where :latest changes under a pod whenever it is rescheduled.
           # The API and the web image of one version belong together. The published tags are
           # the version (1.4.1) and its minor line (1.4); see the release notes before a bump.
-          image: ghcr.io/duartesantos8/opengym-api:1.4.1
+          image: ghcr.io/alikulovuzz/kuch-api:1.4.1
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
@@ -30,9 +30,9 @@ spec:
             - name: DATA_DIR
               value: /data
             - name: RP_ID
-              value: opengym.example.com
+              value: kuch.example.com
             - name: ORIGIN
-              value: https://opengym.example.com
+              value: https://kuch.example.com
             # Everything else in .env.example (INVITE_ONLY, ADMIN_UIDS, FIRST_USER_ADMIN,
             # ALLOW_GUEST, DEFAULT_LANG, PASSWORD_LOGIN, the push keys, ...) goes here the
             # same way. FIRST_USER_ADMIN="1" makes the first profile created on an empty
@@ -56,7 +56,7 @@ spec:
               port: 3000
             initialDelaySeconds: 30
           volumeMounts:
-            - name: opengym-data
+            - name: kuch-data
               mountPath: /data
           resources:
             requests:
@@ -64,7 +64,7 @@ spec:
             limits:
               memory: 512Mi
         - name: web
-          image: ghcr.io/duartesantos8/opengym-web:1.4.1   # same version as the api container
+          image: ghcr.io/alikulovuzz/kuch-web:1.4.1   # same version as the api container
           imagePullPolicy: IfNotPresent
           env:
             # Not the image's default 80: the image runs as uid 101, which can bind a port below
@@ -99,6 +99,6 @@ spec:
             limits:
               memory: 128Mi
       volumes:
-        - name: opengym-data
+        - name: kuch-data
           persistentVolumeClaim:
-            claimName: opengym-data
+            claimName: kuch-data

@@ -9,7 +9,7 @@ let
   version = (builtins.fromJSON (builtins.readFile ../../api/package.json)).version;
 in
 {
-  opengym-frontend = callPackage ./frontend.nix { inherit version; };
-  opengym-api = callPackage ./api.nix { inherit version; };
-  opengym-mcp = callPackage ./mcp.nix { inherit version; };
+  kuch-frontend = callPackage ./frontend.nix { inherit version; };
+  kuch-api = callPackage ./api.nix { inherit version; };
+  kuch-mcp = callPackage ./mcp.nix { inherit version; };
 }

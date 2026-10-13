@@ -2,8 +2,7 @@
 // the latest release on GitHub and optionally downloads + installs the APK.
 //
 // The GitHub releases API is public, so no token is needed (60 requests an hour per address,
-// and the check runs once per app session). GitHub is openGym's home since v1.4.0; the GitLab
-// mirror stopped getting releases, so a phone that asked it saw no update.
+// and the check runs once per app session).
 // On Android (Capacitor) the APK is downloaded natively into the cache directory (an APK with
 // the animations is ~300 MB: read into the WebView's memory it ran phones out of it, and
 // github.com's download redirect has no CORS headers for a WebView fetch anyway), checked
@@ -11,9 +10,16 @@
 
 import { MOBILE } from './mobile.js'
 
-const REPO = 'DuarteSantos8/openGym'
-const LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`
-export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`
+// The GitHub repository ("owner/name") whose releases this app installs, or null while there is
+// no feed, which is the case today: the check then reports no update without asking any server,
+// and there is no releases page to open. Never point it at the upstream project's releases: that
+// APK is signed with another key and can never install over this app. Once the fork publishes its
+// own signed releases, set it to 'alikulovuzz/kuch'.
+export const UPDATE_FEED = null
+
+const latestUrl = feed => `https://api.github.com/repos/${feed}/releases/latest`
+const releasesPage = feed => `https://github.com/${feed}/releases/latest`
+const NO_UPDATE = () => ({ hasUpdate: false, latestVersion: __APP_VERSION__, apkUrl: null, hashUrl: null })
 
 /**
  * Compares two semver strings (e.g. "1.2.11" vs "1.3.0").
@@ -38,30 +44,33 @@ function compareSemver(a, b) {
 }
 
 /**
- * Checks GitHub for a newer version. `releases/latest` is the newest release that is neither a
- * draft nor a pre-release, so a beta never offers itself as an update.
+ * Checks the feed's GitHub releases (UPDATE_FEED unless one is passed) for a newer version.
+ * `releases/latest` is the newest release that is neither a draft nor a pre-release, so a beta
+ * never offers itself as an update.
  * Returns { hasUpdate, latestVersion, apkUrl, hashUrl } or throws on network failure.
  *   - hasUpdate: true if the latest release tag is newer than the running build
  *   - latestVersion: the semver string of the latest release (without "v" prefix)
  *   - apkUrl: direct download URL of the first .apk asset, or null
  *   - hashUrl: direct download URL of the .apk.sha256 hash file, or null
+ * With no feed it reports no update and makes no request.
  */
 // One request per app session: Settings is opened often, GitHub does not need to hear
 // about it every time. The promise is cached, a failure is not.
 let cached = null
 export function resetUpdateCheck() { cached = null }
-export async function checkForUpdate() {
-  if (!cached) cached = fetchLatest().catch(e => { cached = null; throw e })
+export async function checkForUpdate(feed = UPDATE_FEED) {
+  if (!feed) return NO_UPDATE()
+  if (!cached) cached = fetchLatest(feed).catch(e => { cached = null; throw e })
   return cached
 }
-async function fetchLatest() {
-  const res = await fetch(LATEST_URL, { headers: { Accept: 'application/vnd.github+json' } })
+async function fetchLatest(feed) {
+  const res = await fetch(latestUrl(feed), { headers: { Accept: 'application/vnd.github+json' } })
   // 404: the repository has no published release yet
-  if (res.status === 404) return { hasUpdate: false, latestVersion: __APP_VERSION__, apkUrl: null, hashUrl: null }
+  if (res.status === 404) return NO_UPDATE()
   if (!res.ok) throw new Error(`GitHub API ${res.status}`)
   const latest = await res.json()
   const latestVersion = String(latest.tag_name || '').replace(/^v/, '')
-  if (!latestVersion) return { hasUpdate: false, latestVersion: __APP_VERSION__, apkUrl: null, hashUrl: null }
+  if (!latestVersion) return NO_UPDATE()
   const hasUpdate = compareSemver(latestVersion, __APP_VERSION__) > 0
   const assets = latest.assets || []
   const apk = assets.find(a => /\.apk$/i.test(a.name))
@@ -78,8 +87,8 @@ export async function fetchChecksum(hashUrl) {
   let text
   if (MOBILE) {
     const { Filesystem, Directory, Encoding } = await import('@capacitor/filesystem')
-    await Filesystem.downloadFile({ url: hashUrl, path: 'opengym-update.apk.sha256', directory: Directory.Cache })
-    text = (await Filesystem.readFile({ path: 'opengym-update.apk.sha256', directory: Directory.Cache, encoding: Encoding.UTF8 })).data
+    await Filesystem.downloadFile({ url: hashUrl, path: 'kuch-update.apk.sha256', directory: Directory.Cache })
+    text = (await Filesystem.readFile({ path: 'kuch-update.apk.sha256', directory: Directory.Cache, encoding: Encoding.UTF8 })).data
   } else {
     const res = await fetch(hashUrl)
     if (!res.ok) return null
@@ -87,6 +96,11 @@ export async function fetchChecksum(hashUrl) {
   }
   const hex = String(text).trim().split(/\s/)[0]
   return /^[0-9a-f]{64}$/i.test(hex) ? hex.toLowerCase() : null
+}
+
+/** Opens the feed's releases page in a new tab; with no feed there is none, and nothing opens. */
+export function openReleasesPage(feed = UPDATE_FEED) {
+  if (feed) window.open(releasesPage(feed), '_blank', 'noopener')
 }
 
 /**
@@ -109,12 +123,12 @@ export async function sha256(buffer) {
  */
 export async function downloadAndInstall(url, expectedHash, onProgress = null) {
   if (!MOBILE) {
-    window.open(RELEASES_PAGE, '_blank', 'noopener')
+    openReleasesPage()
     return
   }
   if (!/^[0-9a-f]{64}$/i.test(expectedHash || '')) throw new Error('no checksum to verify the download against')
   const { Filesystem, Directory } = await import('@capacitor/filesystem')
-  const fileName = 'opengym-update.apk'
+  const fileName = 'kuch-update.apk'
   const listener = onProgress
     ? await Filesystem.addListener('progress', p => onProgress(p.bytes, p.contentLength))
     : null

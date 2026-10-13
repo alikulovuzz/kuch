@@ -2,7 +2,7 @@
 """The Android app's exercise animations as animated WebP (240 px, lossy q60), from the 360 px
 GIFs of the licensed Gym visual pack. Maintainer only, against the private archive:
 
-    python3 -I scripts/media/build-app-webp.py /path/to/opengym-media [--jobs 3]
+    python3 -I scripts/media/build-app-webp.py /path/to/media-pack [--jobs 3]
 
 Writes <archive>/build-appwebp/<id>.webp. Why images and not the MP4 loops the web uses: in the
 app's WebView a <video> goes through the phone's hardware decoder, which stalled at every loop

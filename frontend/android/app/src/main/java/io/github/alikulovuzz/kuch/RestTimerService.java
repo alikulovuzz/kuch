@@ -1,4 +1,4 @@
-package ch.duartesantos.opengym;
+package io.github.alikulovuzz.kuch;
 
 import android.app.Notification;
 import android.app.Service;
@@ -196,7 +196,7 @@ public class RestTimerService extends Service {
         try {
             if (cpu == null) {
                 PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                cpu = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "opengym:rest-countdown");
+                cpu = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kuch:rest-countdown");
                 cpu.setReferenceCounted(false);
             }
             cpu.acquire(Math.max(0, endsAt - System.currentTimeMillis()) + 10_000);

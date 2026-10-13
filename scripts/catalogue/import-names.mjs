@@ -3,13 +3,14 @@
 // catalogue/i18n/<lang>.json. Only fills names that are missing; a name someone already wrote is
 // never replaced. One-off, kept for the record.
 //
-//   node scripts/catalogue/import-names.mjs /path/to/opengym-media
+//   node scripts/catalogue/import-names.mjs /path/to/media-pack
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const dir = path.join(path.resolve(process.argv[2] || '/mnt/backup-hdd/opengym-media'), 'work/names/out')
+if (!process.argv[2]) { console.error('usage: node scripts/catalogue/import-names.mjs /path/to/media-pack'); process.exit(1) }
+const dir = path.join(path.resolve(process.argv[2]), 'work/names/out')
 const byLang = {}
 for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.json')).sort()) {
   const lang = f.replace(/-\d+\.json$/, '')

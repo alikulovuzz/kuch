@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// One-off: writes catalogue/ from the data openGym shipped up to v1.3.x, so the catalogue starts
+// One-off: writes catalogue/ from the data Kuch shipped up to v1.3.x, so the catalogue starts
 // out holding exactly what the app already knew. Kept for the record and for re-running while
 // v1.4.0 is in development; after that, catalogue/ is the source and this script is not needed.
 //

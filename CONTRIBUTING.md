@@ -1,6 +1,6 @@
-# Contributing to openGym
+# Contributing to Kuch
 
-Thanks for taking a look. openGym is deliberately small and light on dependencies, and the aim is
+Thanks for taking a look. Kuch is deliberately small and light on dependencies, and the aim is
 to keep it that way: easy to read, easy to self-host.
 
 ## Project layout
@@ -13,7 +13,7 @@ api/       Backend: server.js on plain node:http, two dependencies (@simplewebau
 web/       Multi-stage Dockerfile (builds the frontend, serves it with nginx) and the nginx template.
 mcp/       Optional read-only MCP server for LLM clients (Claude Desktop, Cursor, ...). Not in the
            Docker build; it only runs when a client spawns it. See mcp/README.md.
-website/   The static project site at opengym.ch.
+website/   The static project site (inherited from openGym; this fork does not deploy it).
 kubernetes/ Example manifests (docs/SELF_HOSTING_KUBERNETES.md).
 docs/      User and operator guides (index: docs/README.md); docs/dev/ has feature design notes.
 catalogue/ The exercise catalogue: one JSON file per exercise, translations in i18n/, and the
@@ -40,8 +40,9 @@ cd mcp && npm test
   State lives in the Zustand store (`src/store`), pure helpers in `src/lib`. There is no linter or
   formatter config, so follow the surrounding code.
 - **Don't commit** `data/`; it is gitignored. Don't add or replace anything in
-  `catalogue/media/`: the stills and animations are licensed from Gym visual, 180 px at most, and
-  not open to contributions (see [NOTICE.md](NOTICE.md)).
+  `catalogue/media/`: the stills and animations are licensed to openGym by Gym visual, and Kuch
+  carries them unmodified as a non-commercial fork. They stay 180 px at most and are not open to
+  contributions (see [NOTICE.md](NOTICE.md)).
 - **Exercise fixes and translations go through `catalogue/`**, one JSON file per exercise and one
   per language. [catalogue/README.md](catalogue/README.md) explains the fields and how the app is
   built from them; don't edit the generated `frontend/src/lib/exercises-data.js` by hand.
@@ -58,8 +59,8 @@ cd mcp && npm test
 
 ## Using AI tools
 
-openGym itself is developed with Claude Code (see
-[How openGym is built](README.md#how-opengym-is-built)), and [`CLAUDE.md`](CLAUDE.md) holds the
+Kuch itself is developed with Claude Code (see
+[How Kuch is built](README.md#how-kuch-is-built)), and [`CLAUDE.md`](CLAUDE.md) holds the
 project context for it. You're welcome to use whatever tools you like for a pull request. The bar
 is the same either way: you understand the change, it's tested, and you can answer questions about
 it in review.
@@ -96,11 +97,11 @@ should come as a GitHub pull request.
 | You have | Goes to |
 | --- | --- |
 | A quick question, or you'd rather chat | [Discord](https://discord.gg/e62jY6fwVb) |
-| A question, or self-hosting that won't behave | [Discussions → Q&A](https://github.com/DuarteSantos8/openGym/discussions/categories/q-a) |
-| An idea you're not sure about yet | [Discussions → Ideas](https://github.com/DuarteSantos8/openGym/discussions/categories/ideas) |
-| A reproducible bug | [Issues](https://github.com/DuarteSantos8/openGym/issues) |
-| A change you've already built | [A pull request](https://github.com/DuarteSantos8/openGym/pulls) |
-| A security problem | [Private report](https://github.com/DuarteSantos8/openGym/security/advisories/new), see [SECURITY.md](SECURITY.md) |
+| A question, or self-hosting that won't behave | [Discussions → Q&A](https://github.com/alikulovuzz/kuch/discussions/categories/q-a) |
+| An idea you're not sure about yet | [Discussions → Ideas](https://github.com/alikulovuzz/kuch/discussions/categories/ideas) |
+| A reproducible bug | [Issues](https://github.com/alikulovuzz/kuch/issues) |
+| A change you've already built | [A pull request](https://github.com/alikulovuzz/kuch/pulls) |
+| A security problem | [Private report](https://github.com/alikulovuzz/kuch/security/advisories/new), see [SECURITY.md](SECURITY.md) |
 
 An answered question in Discussions is worth more than the same answer in a chat log, because the
 next person searching "passkey login fails behind my reverse proxy" finds it. If a Discord answer

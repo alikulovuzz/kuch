@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Turns the licensed Gym visual pack into the media files openGym ships.
+"""Turns the licensed Gym visual pack into the media files Kuch ships.
 
 Run by the maintainer only, against the private archive (never committed, never published):
 
-    python3 -I scripts/media/build-media.py /path/to/opengym-media [--jobs 6] [--only 0001,0002]
+    python3 -I scripts/media/build-media.py /path/to/media-pack [--jobs 6] [--only 0001,0002]
 
 Reads <archive>/work/index.json (built from the pack's file names) and the white-background GIF
 ZIPs under <archive>/original/gif-white/, and writes to <archive>/build/:
