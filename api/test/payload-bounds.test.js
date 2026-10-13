@@ -4,15 +4,10 @@
  * or from the synced state, and a client can put megabytes in either. The Coach runs on the
  * instance's own key, so an unbounded field is a bill someone else pays. These tests feed the
  * builder far more than any screen allows, through both doors, and check what comes out. */
-import test, { mock } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { tempData, sampleState } from './helpers.mjs';
-
-// sampleState() is dated July 2026, and the review window reaches back MAX_WEEKS from today: on
-// the real clock it left it on 2026-10-13. Date is pinned to the week these tests were written;
-// timers stay real.
-mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-08-01T12:00:00Z') });
 
 tempData();
 const payload = await import('../coach/core/payload.js');
@@ -209,7 +204,7 @@ test('the plan and the log a real app writes pass through exactly as before', ()
   });
   assert.deepEqual(p.window.workouts.at(-1).entries[0].sets[0], { done: true, w: 20, r: 10, rpe: 9.5 });
   assert.deepEqual(p.window.workouts.at(-1).entries[0].target, { sets: 3, reps: 10, sec: undefined, weight: 20 });
-  assert.deepEqual(p.bodyweight, { goal: 80, series: [{ d: '2026-07-20', w: 78.5 }] });
+  assert.deepEqual(p.bodyweight, { goal: 80, series: [{ d: S.workouts[0].d, w: 78.5 }] });
 });
 
 test('the cohort is bounded where it joins the payload, whoever built it', () => {

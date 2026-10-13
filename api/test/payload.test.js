@@ -1,11 +1,6 @@
-import test, { mock } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData, sampleState } from './helpers.mjs';
-
-// sampleState() and the workouts below are dated July 2026, and the review window reaches back
-// MAX_WEEKS from today: on the real clock they left it on 2026-10-13. Date is pinned to the week
-// these tests were written; timers stay real.
-mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-08-01T12:00:00Z') });
 
 tempData();
 const payload = await import('../coach/core/payload.js');
