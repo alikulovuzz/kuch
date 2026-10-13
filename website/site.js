@@ -5,13 +5,8 @@
 
 const GH_REPO = 'https://api.github.com/repos/alikulovuzz/kuch'
 
-// Discord publishes an invite's guild counts to anyone who asks for the invite with
-// ?with_counts=1. No bot token, no widget to enable, and the API reflects the caller's
-// Origin, so the browser is allowed to read it. The code is the permanent invite in the
-// nav; if that invite is ever revoked this returns 404 and the count simply stays blank.
-const DC_INVITE = 'https://discord.com/api/v10/invites/e62jY6fwVb?with_counts=1'
-// The two network lookups below are decoration; they wait until the page is idle so they
-// never compete with the stylesheet, the hero image or the demo frame.
+// The repo-count lookup below is decoration; it waits until the page is idle so it
+// never competes with the stylesheet, the hero image or the demo frame.
 const whenIdle = (fn) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 2500 }) : setTimeout(fn, 1200))
 
 /* ------------------------------------------------------- one panel controller
@@ -252,7 +247,7 @@ function panel({ opener, panelEl, flag, closeBtn }) {
   const set = (id, v) => document.querySelectorAll('[data-gh="' + id + '"]').forEach(el => { el.textContent = v })
   try {
     let d = null
-    const cached = sessionStorage.getItem('repo_meta_gh2')
+    const cached = sessionStorage.getItem('repo_meta_gh3')
     if (cached) d = JSON.parse(cached)
     else {
       const r = await fetch(GH_REPO)
@@ -260,40 +255,17 @@ function panel({ opener, panelEl, flag, closeBtn }) {
       const j = await r.json()
       // open_issues_count counts open pull requests too. GitHub's own repo header does the
       // same, so the number matches what a visitor sees over there.
-      d = { stars_count: j.stargazers_count, forks_count: j.forks_count, open_issues_count: j.open_issues_count }
-      sessionStorage.setItem('repo_meta_gh2', JSON.stringify(d))
+      d = { stars_count: j.stargazers_count, forks_count: j.forks_count, open_issues_count: j.open_issues_count, watchers_count: j.subscribers_count }
+      sessionStorage.setItem('repo_meta_gh3', JSON.stringify(d))
     }
     set('stars', '★ ' + d.stars_count)
     set('stars-n', d.stars_count)
     set('forks-n', d.forks_count)
+    // subscribers_count is the Watch count; GitHub's watchers_count is just stars again.
+    if (d.watchers_count != null) set('watchers-n', d.watchers_count)
     // Leave the placeholder standing rather than writing an empty box.
     if (d.open_issues_count !== '' && d.open_issues_count != null) set('issues-n', d.open_issues_count)
   } catch (e) { /* offline / rate-limited, leave placeholders */ }
-})
-
-/* --------------------------------------------------- Discord members (nav + specs)
-   Same shape as the repo counts above, and just as optional: the placeholder next to
-   the Discord link is empty, so a blocked or rate-limited request leaves the link
-   reading exactly as it did before anyone counted anything. */
-;whenIdle(async () => {
-  const set = (id, v) => document.querySelectorAll('[data-dc="' + id + '"]').forEach(el => { el.textContent = v })
-  try {
-    let n = null
-    const cached = sessionStorage.getItem('discord_members')
-    if (cached) n = JSON.parse(cached)
-    else {
-      const r = await fetch(DC_INVITE)
-      if (!r.ok) return
-      const j = await r.json()
-      n = j.approximate_member_count
-      if (typeof n !== 'number') return
-      sessionStorage.setItem('discord_members', JSON.stringify(n))
-    }
-    // Grouped like the other four-figure numbers on the page (1,324 exercises).
-    const fmt = n.toLocaleString('en-US')
-    set('members', fmt)
-    set('members-n', fmt)
-  } catch (e) { /* offline / blocked, the link keeps its plain label */ }
 })
 
 /* -------------------------------------------------------------- about timeline

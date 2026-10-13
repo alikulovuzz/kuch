@@ -96,7 +96,6 @@ should come as a GitHub pull request.
 
 | You have | Goes to |
 | --- | --- |
-| A quick question, or you'd rather chat | [Discord](https://discord.gg/e62jY6fwVb) |
 | A question, or self-hosting that won't behave | [Discussions → Q&A](https://github.com/alikulovuzz/kuch/discussions/categories/q-a) |
 | An idea you're not sure about yet | [Discussions → Ideas](https://github.com/alikulovuzz/kuch/discussions/categories/ideas) |
 | A reproducible bug | [Issues](https://github.com/alikulovuzz/kuch/issues) |
@@ -104,8 +103,7 @@ should come as a GitHub pull request.
 | A security problem | [Private report](https://github.com/alikulovuzz/kuch/security/advisories/new), see [SECURITY.md](SECURITY.md) |
 
 An answered question in Discussions is worth more than the same answer in a chat log, because the
-next person searching "passkey login fails behind my reverse proxy" finds it. If a Discord answer
-turns out to be worth keeping, it belongs in Discussions afterwards.
+next person searching "passkey login fails behind my reverse proxy" finds it.
 
 ## Reporting bugs
 

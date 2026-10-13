@@ -47,6 +47,5 @@ Design notes for specific features, kept next to the code they describe:
 
 ## Still stuck?
 
-Ask on the [Discord](https://discord.gg/e62jY6fwVb) or in
-[Discussions](https://github.com/alikulovuzz/kuch/discussions). If something in these docs was
+Ask in [Discussions](https://github.com/alikulovuzz/kuch/discussions). If something in these docs was
 wrong or missing, that's worth an issue too.

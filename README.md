@@ -7,8 +7,6 @@
 Plan your week, run guided workouts, log every set and your body weight,<br>
 on your phone, synced across your devices, behind your own passkey login.
 
-[![Discord](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Finvites%2Fe62jY6fwVb%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&suffix=%20members&label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge)](https://discord.gg/e62jY6fwVb)
-[![Online](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Finvites%2Fe62jY6fwVb%3Fwith_counts%3Dtrue&query=%24.approximate_presence_count&suffix=%20online&label=&logo=discord&logoColor=white&color=3BA55C&style=for-the-badge)](https://discord.gg/e62jY6fwVb)
 [![GitHub stars](https://img.shields.io/github/stars/alikulovuzz/kuch?style=for-the-badge&logo=github&logoColor=white&color=24292f)](https://github.com/alikulovuzz/kuch/stargazers)
 
 [![Release](https://img.shields.io/github/v/release/alikulovuzz/kuch?style=flat-square)](https://github.com/alikulovuzz/kuch/releases)
@@ -270,10 +268,8 @@ two weeks after it.
 
 ## Community
 
-- **[Discord](https://discord.gg/e62jY6fwVb)** for release announcements, self-hosting help and
-  quick back-and-forth. Usually the fastest way to get an answer.
-- **[Discussions](https://github.com/alikulovuzz/kuch/discussions)** for questions and ideas
-  you want the next person to find by searching.
+- **[Discussions](https://github.com/alikulovuzz/kuch/discussions)** for questions, ideas and
+  self-hosting help, where the next person can find the answer by searching.
 - **[Issues](https://github.com/alikulovuzz/kuch/issues)** for reproducible bugs and agreed-on
   work. Login trouble is almost always an `RP_ID`/`ORIGIN` mismatch; the
   [self-hosting guide](docs/SELF_HOSTING.md) covers it.
