@@ -1,5 +1,5 @@
 /* kuch-api — passkey (WebAuthn) auth + per-user state storage for Kuch
-   No framework, JSON-file storage, signed session cookies.               */
+   No framework, JSON-file or PostgreSQL storage (store/), signed cookies. */
 import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -34,7 +34,7 @@ import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE } from 
 import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
-import { store, UNREADABLE } from './store/index.js';
+import { store, UNREADABLE, StoreUnavailable, InvalidDocument } from './store/index.js';
 import { keyedLock } from './keyed-lock.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
 
@@ -117,7 +117,11 @@ if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(
 const SECRET = fs.readFileSync(secretFile, 'utf8').trim();
 
 // Every account, passkey and invite (store/index.js), held here in memory and changed in place.
-let db = await store.loadDb();
+// On Postgres this is also where the API waits for the database, takes its single-instance lock
+// and migrates the schema; any of those failing stops the process here, before it listens.
+let db;
+try { db = await store.loadDb(); }
+catch (e) { console.error('kuch-api cannot start:', e.message); process.exit(1); }
 const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
 // Every route that changes `db` saves all of it, and answers only once the save has resolved. The
 // change itself is made synchronously, after the route's last check, before the save is awaited.
@@ -1839,14 +1843,29 @@ function dataWritable() {
   dataProbe = { at: now, ok };
   return ok;
 }
+// The storage backend's own check (store.health: a query on Postgres, null for files), in the
+// same window and for the same reason: anyone who can reach the port can call it.
+let storeProbe = { at: 0, result: null };
+async function databaseHealth() {
+  const now = Date.now();
+  if (storeProbe.at && now - storeProbe.at < DATA_PROBE_MS) return storeProbe.result;
+  storeProbe = { at: now, result: await store.health() };
+  return storeProbe.result;
+}
 
 const routes = {
   // 503 rather than a flag in a 200: the container healthcheck is `wget --spider`, which reads
   // the status and nothing else, and an instance that cannot write its data directory is exactly
   // what "unhealthy" is for. The 200 keeps the shape it had, plus the flag it is now asserting.
+  // On Postgres the database is the other half of "can this instance save": `database` says
+  // whether it answers, and a database that does not is a 503 too. The file backend has none, and
+  // answers exactly as before.
   'GET /api/health': async (req, res) => {
-    if (!dataWritable()) return json(res, 503, { ok: false, writable: false });
-    json(res, 200, { ok: true, users: db.users.length, writable: true });
+    const writable = dataWritable();
+    const database = await databaseHealth();
+    const reported = database ? { database: database.ok ? 'ok' : 'down' } : {};
+    if (!writable || database?.ok === false) return json(res, 503, { ok: false, writable, ...reported });
+    json(res, 200, { ok: true, users: db.users.length, writable: true, ...reported });
   },
 
   // Public config the login screen needs before anyone is signed in. `coach` is absent unless
@@ -2120,14 +2139,15 @@ const routes = {
   // Just the revision: the client asks this every half minute while it is open and on every
   // return to the foreground, and fetches the document only when the number moved — a signed-in
   // device is meant to show what the server has, and this is what keeps that cheap.
-  // Cheap means the stat cache the reminder tick already uses: parsing a megabytes-long document
-  // to read one number off it cost 31 ms per poll on a 2.4 MB state, all of it on the event loop.
-  // Every write goes through store.writeState, which evicts the cache, so it never hands out a stale rev.
+  // Cheap means never parsing the document: that cost 31 ms per poll on a 2.4 MB state, all of it
+  // on the event loop. The file backend answers from the stat cache the reminder tick already uses
+  // (every write goes through store.casWriteState, which evicts it, so it never hands out a stale
+  // rev); Postgres selects the two columns.
   'GET /api/data/rev': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    const doc = await store.readStateCached(user.id);
-    json(res, 200, { rev: doc?._rev || 0, ...(doc?._wid ? { wid: doc._wid } : {}) });
+    const cur = await store.readStateRev(user.id);
+    json(res, 200, { rev: cur?.rev || 0, ...(cur?.wid ? { wid: cur.wid } : {}) });
   },
 
   'PUT /api/data': async (req, res) => {
@@ -2207,15 +2227,23 @@ const routes = {
       body.state._wids = [...(Array.isArray(cur?._wids) ? cur._wids : []), ...(cur?._wid ? [cur._wid] : [])]
         .filter(x => typeof x === 'string').slice(-WID_KEEP);
       body.state._wid = crypto.randomBytes(8).toString('hex');
-      // JSON.parse takes any nesting, JSON.stringify recurses and runs out of stack on a document
-      // nested some thousands deep. No client builds one; it is a bad request, not a server error.
-      let text;
-      try { text = JSON.stringify(body.state); }
-      catch (e) { if (e instanceof RangeError) return json(res, 400, { error: 'invalid state' }); throw e; }
       // The read above was awaited: the session may have ended since, or an admin deleted the
       // profile (whose state goes under this same lock), and a write now would outlive that.
       if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
-      await store.writeState(user.id, text);
+      // Written only over the document read above (store/index.js casWriteState). Under the lock
+      // nothing in this process can have written since; on Postgres a write from outside it (psql,
+      // a restore) can, and is then the same conflict as a stale baseRev.
+      // JSON.parse takes any nesting, JSON.stringify recurses and runs out of stack on a document
+      // nested some thousands deep; Postgres refuses a string holding U+0000. No client builds
+      // either; it is a bad request, not a server error.
+      let landed;
+      try { landed = await store.casWriteState(user.id, cur ? curRev : null, typeof cur?._wid === 'string' ? cur._wid : null, body.state); }
+      catch (e) { if (e instanceof RangeError || e instanceof InvalidDocument) return json(res, 400, { error: 'invalid state' }); throw e; }
+      if (!landed) {
+        const now = await store.readStateStrict(user.id);
+        if (now === UNREADABLE) { console.error('state file unreadable for', user.id); return json(res, 503, { error: 'state unreadable' }); }
+        return json(res, 409, { error: 'conflict', rev: now?._rev || 0, state: forClient(now) });
+      }
       // Starts (or stops) the grace clock of every stored file this write stopped (or started)
       // referencing. Bookkeeping only: the state is already saved, so nothing here may turn a
       // successful write into an error.
@@ -2624,6 +2652,12 @@ const server = http.createServer(async (req, res) => {
     // A refused upload or a missing file: the caller's to act on, never a logged 500.
     if (e instanceof MediaError) {
       if (!res.headersSent) json(res, e.status, { error: e.message, code: e.code, ...e.extra }, e.headers);
+      return;
+    }
+    // The database is down or restarting (store/errors.js): worth a retry, not a bug.
+    if (e instanceof StoreUnavailable) {
+      console.error(key, e.message);
+      if (!res.headersSent) json(res, 503, { error: 'the database is unavailable, try again in a moment', code: 'database' }, { 'Retry-After': '5' });
       return;
     }
     // Every scrypt slot and the short queue behind them are taken (password.js).

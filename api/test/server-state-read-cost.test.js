@@ -158,7 +158,9 @@ test('the poll really is reading through the stat cache', async t => {
 
 // The other two sites want `lang` for a push payload, which nothing outside the push service can
 // observe — so they are pinned here, at the only place that can see them: the source.
-test('the three hot-path state reads all go through readStateCached', () => {
+// The poll asks the store for the revision alone (readStateRev): the file backend answers it from
+// this same stat cache (store/file.js), Postgres from the rev and wid columns.
+test('the three hot-path state reads never parse the whole document', () => {
   const src = fs.readFileSync(path.join(API, 'server.js'), 'utf8');
   // Every route is one `'METHOD /path': async (req, res) => {` entry in the routes object, so a
   // handler runs from its key to the start of the next one.
@@ -168,7 +170,10 @@ test('the three hot-path state reads all go through readStateCached', () => {
     const end = src.indexOf("\n  '", at + 1);
     return src.slice(at, end === -1 ? undefined : end);
   };
-  for (const key of ['GET /api/data/rev', 'POST /api/push/test', 'POST /api/push/rest-timer']) {
+  const rev = handler('GET /api/data/rev');
+  assert.match(rev, /readStateRev\(user\.id\)/, 'the poll should ask for the revision alone');
+  assert.doesNotMatch(rev, /readState(Strict|Cached)?\(user\.id\)/, 'the poll reads the whole document');
+  for (const key of ['POST /api/push/test', 'POST /api/push/rest-timer']) {
     const body = handler(key);
     assert.match(body, /readStateCached\(user\.id\)/, `${key} should read through the cache`);
     assert.doesNotMatch(body, /readState\(user\.id\)/, `${key} parses the whole document again`);

@@ -8,7 +8,7 @@
    Every method is async, like every backend's (store/index.js). Under that, readState and
    readStateStrict really read in the background (fs.promises): a state can be megabytes. The rest
    do their work synchronously inside the call: saveDb serialises and writes `db` in the turn it
-   is called, so saves land in the order they were asked for; and readStateCached and writeState
+   is called, so saves land in the order they were asked for; and readStateCached and casWriteState
    share the stat cache, which a read still in flight across a write would refill with the old
    document. */
 import fs from 'node:fs';
@@ -126,10 +126,20 @@ export function createFileStore({ dir }) {
     while (stateCache.size > STATE_CACHE_MAX) stateCache.delete(stateCache.keys().next().value);
     return S;
   }
-  // `text` is the whole document, already serialised. Throws if it could not be written, and then
-  // nothing changed on disk (the rename is atomic).
-  async function writeState(uid, text) {
-    atomicWrite(stateFile(uid), text);
+  // The revision and write id GET /api/data/rev answers, through the stat cache.
+  async function readStateRev(uid) {
+    const S = await readStateCached(uid);
+    return S ? { rev: S._rev || 0, wid: typeof S._wid === 'string' ? S._wid : null } : null;
+  }
+  // Replaces the document. The compare half of the compare-and-swap is the caller's per-profile
+  // lock (server.js stateLock): this process is the only writer of a state file, and its writes to
+  // one profile run one at a time, so the document the caller read under the lock is still the one
+  // on disk. Checking again here would read and parse a document that can be megabytes, on every
+  // write, to learn nothing. So this always lands, and answers true. Throws if it could not be
+  // written, and then nothing changed on disk (the rename is atomic); JSON.stringify's RangeError
+  // for a document nested too deep is thrown before anything is touched.
+  async function casWriteState(uid, expectedRev, expectedWid, doc) {
+    atomicWrite(stateFile(uid), JSON.stringify(doc));
     // The stat cache cannot see this write on its own: mtime granularity is 4 ms here (ext4 on
     // this kernel — 3901 of 3999 back-to-back same-size writes shared one timestamp), and a
     // `_rev` going from 7 to 8 does not change the file's size, so two writes inside one 4 ms
@@ -137,6 +147,7 @@ export function createFileStore({ dir }) {
     // the old revision until some later write happened to land on a different tick. This is the
     // only writer of a state file in the tree, so evicting here is the whole fix.
     stateCache.delete(uid);
+    return true;
   }
   // Never throws: a state that is already gone is what was asked for.
   async function deleteState(uid) {
@@ -149,5 +160,9 @@ export function createFileStore({ dir }) {
     } catch { return []; }
   }
 
-  return { loadDb, saveDb, readState, readStateStrict, readStateCached, writeState, deleteState, listStateUids };
+  // Nothing to report beyond the data directory, which GET /api/health already probes.
+  async function health() { return null; }
+  async function close() {}
+
+  return { loadDb, saveDb, readState, readStateStrict, readStateCached, readStateRev, casWriteState, deleteState, listStateUids, health, close };
 }
