@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { tempData } from './helpers.mjs';
 
-const dir = tempData();
+const dir = await tempData();
 const cfg = await import('../coach/config.js');
 
 function connectInstance(token = 'tok-instance') {

@@ -16,7 +16,7 @@ import { isWarmupRow } from '../../frontend/src/lib/workout-model.js';
 import { readSession as frontendReadSession } from '../../frontend/src/lib/progression.js';
 import { NOTE_MAX as frontendNoteMax } from '../../frontend/src/lib/history.js';
 
-tempData();
+await tempData();
 const payload = await import('../coach/core/payload.js');
 const { handleFor } = await import('../coach/handle.js');
 

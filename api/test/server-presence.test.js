@@ -19,6 +19,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -33,22 +34,21 @@ const TTL = 70000, GRACE = 45000;
 const T0 = Math.floor(Date.now() / 1000) * 1000;
 
 async function startServer(t) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-presence-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
+  const home = await dataHome({ t, prefix: 'gym-presence-', secret: SECRET, db: {
     users: [
       { id: ADMIN, name: 'Adminna', created: new Date().toISOString(), admin: true },
       { id: ATHLETE, name: 'Athlete', created: new Date().toISOString() }
     ], creds: [], subs: [], invites: []
-  }));
+  } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['--import', './test/fake-clock.mjs', 'server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
   });
   let log = '';
   child.stdout.on('data', d => log += d);
   child.stderr.on('data', d => log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   const api = `http://127.0.0.1:${await boundPort(child, () => log)}`;
 
   const post = async body => {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData, sampleState } from './helpers.mjs';
 
-tempData();
+await tempData();
 const payload = await import('../coach/core/payload.js');
 const { handleFor, HANDLE_LENGTH } = await import('../coach/handle.js');
 

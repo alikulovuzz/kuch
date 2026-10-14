@@ -12,6 +12,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 import { stampPut } from '../sync-stamps.js';
 
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -96,14 +97,13 @@ function mintSession(uid) {
   return payload + '.' + crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
 }
 test('PUT /api/data: an older app\'s push does not wipe the records, and its delete is stamped', async t => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-stamps-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: [{ id: 'u1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: [] }));
+  const home = await dataHome({ t, prefix: 'gym-stamps-', secret: SECRET, db: { users: [{ id: 'u1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: [] } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], { cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
   let log = '';
   child.stdout.on('data', d => log += d); child.stderr.on('data', d => log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   const base = `http://127.0.0.1:${await boundPort(child, () => log)}`;
   const headers = { Cookie: `gymsid=${mintSession('u1')}`, 'Content-Type': 'application/json' };
   const put = async body => { const r = await fetch(`${base}/api/data`, { method: 'PUT', headers, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
@@ -243,14 +243,13 @@ test('an older app\'s push never gets the write ids stamped as settings, and an 
 // once the revision moves (v1.3.9 pullState). When the server put back what it left out, the
 // stored document goes one revision further, so that app's next check reads it.
 test('PUT /api/data: a document the server corrected for an older app is one revision further than it was told', async t => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-stamps-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: [{ id: 'u1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: [] }));
+  const home = await dataHome({ t, prefix: 'gym-stamps-', secret: SECRET, db: { users: [{ id: 'u1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: [] } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], { cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
   let log = '';
   child.stdout.on('data', d => log += d); child.stderr.on('data', d => log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   const base = `http://127.0.0.1:${await boundPort(child, () => log)}`;
   const headers = { Cookie: `gymsid=${mintSession('u1')}`, 'Content-Type': 'application/json' };
   const put = async body => { const r = await fetch(`${base}/api/data`, { method: 'PUT', headers, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
@@ -381,14 +380,13 @@ test('a field with no history of its earlier values (stamped before it was kept)
 });
 
 test('PUT /api/data: an older app\'s two changes of one setting in a row both land, and the note stays on the server', async t => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-stamps-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: [{ id: 'u1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: [] }));
+  const home = await dataHome({ t, prefix: 'gym-stamps-', secret: SECRET, db: { users: [{ id: 'u1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: [] } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], { cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
   let log = '';
   child.stdout.on('data', d => log += d); child.stderr.on('data', d => log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   const base = `http://127.0.0.1:${await boundPort(child, () => log)}`;
   const headers = { Cookie: `gymsid=${mintSession('u1')}`, 'Content-Type': 'application/json' };
   const put = async body => { const r = await fetch(`${base}/api/data`, { method: 'PUT', headers, body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
@@ -407,7 +405,7 @@ test('PUT /api/data: an older app\'s two changes of one setting in a row both la
   assert.equal(now.rev, r.body.rev);                 // nothing set back, so nothing to read again
   assert.equal('_unstamped' in now.state, false);
   assert.equal('_prior' in now.state, false);
-  const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, 'state-u1.json'), 'utf8'));
+  const onDisk = await home.readState('u1');
   assert.ok(onDisk._unstamped?.ed?.restSec > 0);
   assert.equal(onDisk._prior?.restSec?.length, 2);   // 100, then 120
 });

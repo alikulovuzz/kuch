@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData } from './helpers.mjs';
 
-tempData();
+await tempData();
 const anthropic = (await import('../coach/core/adapters/anthropic.js')).default;
 const openai = (await import('../coach/core/adapters/openai.js')).default;
 const gemini = (await import('../coach/core/adapters/gemini.js')).default;

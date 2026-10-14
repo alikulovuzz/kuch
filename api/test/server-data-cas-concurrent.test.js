@@ -16,6 +16,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -34,20 +35,18 @@ const bigWorkouts = () => Array.from({ length: 6000 }, (_, i) => ({
 }));
 
 async function startServer(t) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-cas-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
+  const home = await dataHome({ t, prefix: 'gym-cas-', secret: SECRET, db: {
     users: [{ id: UID, name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: []
-  }));
-  fs.writeFileSync(path.join(dataDir, `state-${UID}.json`), JSON.stringify({ _rev: 1, _wid: 'seed', routines: [], workouts: bigWorkouts() }));
+  }, states: { [UID]: { _rev: 1, _wid: 'seed', routines: [], workouts: bigWorkouts() } } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
   });
-  const h = { api: '', log: '', dataDir };
+  const h = { api: '', log: '', home, dataDir };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   h.port = await boundPort(child, () => h.log);
   h.api = `http://127.0.0.1:${h.port}`;
   return h;
@@ -57,13 +56,13 @@ const put = async (h, body) => {
   const r = await fetch(`${h.api}/api/data`, { method: 'PUT', headers, body: JSON.stringify(body) });
   return { status: r.status, body: await r.json() };
 };
-const onDisk = h => JSON.parse(fs.readFileSync(path.join(h.dataDir, `state-${UID}.json`), 'utf8'));
+const onDisk = h => h.home.readState(UID);
 
 test('two devices pushing over the same revision at once: one write lands, the other gets 409 with it', async t => {
   const h = await startServer(t);
   const workouts = bigWorkouts();
   for (let round = 0; round < 20; round++) {
-    const { _rev: base, _wid: baseWid } = onDisk(h);
+    const { _rev: base, _wid: baseWid } = await onDisk(h);
     const [a, b] = await Promise.all([
       put(h, { state: { _ts: round * 2 + 1, device: 'a', routines: [], workouts }, baseRev: base, baseWid }),
       put(h, { state: { _ts: round * 2 + 2, device: 'b', routines: [], workouts }, baseRev: base, baseWid })
@@ -74,7 +73,7 @@ test('two devices pushing over the same revision at once: one write lands, the o
     assert.equal(lost.body.error, 'conflict');
     assert.equal(lost.body.rev, base + 1, 'the 409 reports the revision the other write made');
     assert.equal(lost.body.state._wid, won.body.wid, 'and carries the document it stored');
-    const disk = onDisk(h);
+    const disk = await onDisk(h);
     assert.equal(disk._rev, base + 1);
     assert.equal(disk._wid, won.body.wid);
     assert.equal(disk.device, won === a ? 'a' : 'b');
@@ -84,7 +83,7 @@ test('two devices pushing over the same revision at once: one write lands, the o
 test('two overwrites without baseRev at once: each gets its own revision, none is reused', async t => {
   const h = await startServer(t);
   const workouts = bigWorkouts();
-  const base = onDisk(h)._rev;
+  const base = (await onDisk(h))._rev;
   const [a, b] = await Promise.all([
     put(h, { state: { _ts: 1, device: 'a', routines: [], workouts } }),
     put(h, { state: { _ts: 2, device: 'b', routines: [], workouts } })
@@ -93,7 +92,7 @@ test('two overwrites without baseRev at once: each gets its own revision, none i
   assert.equal(b.status, 200);
   assert.deepEqual([a.body.rev, b.body.rev].sort(), [base + 1, base + 2]);
   const last = a.body.rev > b.body.rev ? a : b;
-  const disk = onDisk(h);
+  const disk = await onDisk(h);
   assert.equal(disk._rev, base + 2);
   assert.equal(disk._wid, last.body.wid);
   assert.ok(disk._wids.includes((last === a ? b : a).body.wid), 'the later write descends from the earlier one');

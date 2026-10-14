@@ -12,6 +12,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -22,28 +23,28 @@ const mintSession = uid => {
 const ADMIN = 'u_adm_1', ADMIN2 = 'u_adm_2', VICTIM = 'u_vic_1';
 const as = uid => ({ Cookie: `gymsid=${mintSession(uid)}`, 'Content-Type': 'application/json' });
 async function startServer(t, { twoAdmins = false } = {}) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-del-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
+  const home = await dataHome({ t, prefix: 'gym-del-', secret: SECRET });
+  const dataDir = home.dir;
   const users = [
     { id: ADMIN, name: 'Adminna', created: new Date().toISOString(), admin: true },
     { id: VICTIM, name: 'Mallory', created: new Date().toISOString(), invitedBy: 'CODE1' },
   ];
   if (twoAdmins) users.push({ id: ADMIN2, name: 'Second', created: new Date().toISOString(), admin: true });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
+  await home.writeDb({
     users,
     creds: [{ id: 'c-victim', userId: VICTIM, publicKey: 'x' }, { id: 'c-admin', userId: ADMIN, publicKey: 'y' }],
     subs: [{ endpoint: 'https://push/victim', userId: VICTIM }, { endpoint: 'https://push/admin', userId: ADMIN }],
     invites: [{ code: 'CODE1', usedBy: VICTIM, usedAt: new Date().toISOString() }],
-  }));
-  fs.writeFileSync(path.join(dataDir, `state-${VICTIM}.json`), JSON.stringify({ unit: 'kg', workouts: [], _rev: 3 }));
+  });
+  await home.writeState(VICTIM, { unit: 'kg', workouts: [], _rev: 3 });
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' },
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' },
   });
-  const h = { api: '', log: '', dataDir };
+  const h = { api: '', log: '', home, dataDir };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   // The boot line carries the port the listener bound, so it is both the address and the
   // readiness signal — see boundPort in helpers.mjs for why the test does not pick one.
   h.port = await boundPort(child, () => h.log);
@@ -52,22 +53,22 @@ async function startServer(t, { twoAdmins = false } = {}) {
     const r = await fetch(`${h.api}/api/admin/user/delete`, { method: 'POST', headers: { ...as(uid), Origin: 'http://localhost:8080' }, body: JSON.stringify({ id }) });
     return { status: r.status, body: await r.json() };
   };
-  h.db = () => JSON.parse(fs.readFileSync(path.join(h.dataDir, 'db.json'), 'utf8'));
+  h.db = () => h.home.readDb();
   h.stackFrames = () => h.log.split('\n').filter(l => /^\s+at /.test(l)).length;
   return h;
 }
 
 test('removes the account and everything attached to it', async t => {
   const h = await startServer(t);
-  assert.ok(fs.existsSync(path.join(h.dataDir, `state-${VICTIM}.json`)));
+  assert.ok(await h.home.readState(VICTIM));
   const res = await h.del(VICTIM);
   assert.equal(res.status, 200);
 
-  const db = h.db();
+  const db = await h.db();
   assert.deepEqual(db.users.map(u => u.id), [ADMIN], 'the user is gone');
   assert.deepEqual(db.creds.map(c => c.userId), [ADMIN], 'their passkeys are gone');
   assert.deepEqual(db.subs.map(s => s.userId), [ADMIN], 'their push subscriptions are gone');
-  assert.equal(fs.existsSync(path.join(h.dataDir, `state-${VICTIM}.json`)), false, 'their history is gone');
+  assert.equal(await h.home.readState(VICTIM), null, 'their history is gone');
   // The code they joined with stays burned: it was used, and freeing it would quietly widen
   // an invite-only instance.
   assert.equal(db.invites[0].usedBy, VICTIM);
@@ -91,14 +92,14 @@ test('refuses the two deletions that cannot be undone', async t => {
 
   const last = await h.del(ADMIN, ADMIN);   // ADMIN is also the only admin
   assert.equal(last.status, 400);
-  assert.equal(h.db().users.length, 2, 'nothing was removed');
+  assert.equal((await h.db()).users.length, 2, 'nothing was removed');
 });
 
 test('another admin can be deleted while one remains', async t => {
   const h = await startServer(t, { twoAdmins: true });
   const res = await h.del(ADMIN2);
   assert.equal(res.status, 200);
-  assert.deepEqual(h.db().users.map(u => u.id).sort(), [ADMIN, VICTIM].sort());
+  assert.deepEqual((await h.db()).users.map(u => u.id).sort(), [ADMIN, VICTIM].sort());
 });
 
 test('says so plainly when the account is not there, and needs an admin', async t => {
@@ -107,5 +108,5 @@ test('says so plainly when the account is not there, and needs an admin', async 
   assert.equal(missing.status, 404);
   const asVictim = await h.del(ADMIN, VICTIM);
   assert.equal(asVictim.status, 403, 'an ordinary user cannot delete anyone');
-  assert.equal(h.db().users.length, 2);
+  assert.equal((await h.db()).users.length, 2);
 });

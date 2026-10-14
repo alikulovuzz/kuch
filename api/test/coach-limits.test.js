@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { tempData, writeState, sampleState } from './helpers.mjs';
 
-const DIR = tempData();
+const DIR = await tempData();
 const cfg = await import('../coach/config.js');
 const jobs = await import('../coach/jobs.js');
 const cadence = await import('../coach/cadence.js');
@@ -36,7 +36,7 @@ const lastOutcome = uid => jobs.readUser(uid).history.at(-1);
 
 test('forgetting a profile does not hand it a fresh daily cap', async () => {
   const uid = 'u-forget-cap';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   cfg.save({ caps: { perProfileDaily: 1, instanceDaily: 0 } });
   try {
     await jobs.enqueue(uid, { kind: 'review' });
@@ -72,8 +72,8 @@ test('with nothing spent today, forget leaves no file at all', () => {
 test('the instance cap is reserved at enqueue, so a job still running already counts', async () => {
   cfg.save({ caps: { perProfileDaily: 10, instanceDaily: 1 }, daily: null, log: [] });
   try {
-    writeState(DIR, 'u-inst-1', sampleState());
-    writeState(DIR, 'u-inst-2', sampleState());
+    await writeState(DIR, 'u-inst-1', sampleState());
+    await writeState(DIR, 'u-inst-2', sampleState());
     await jobs.enqueue('u-inst-1', { kind: 'review' });
     assert.ok(jobs.status('u-inst-1').job, 'the first job is on its way');
     await assert.rejects(jobs.enqueue('u-inst-2', { kind: 'review' }), e => e.code === 'cap',
@@ -88,7 +88,7 @@ test('the instance cap is reserved at enqueue, so a job still running already co
 
 test('the instance count is not bounded by the length of the job log', async () => {
   const uid = 'u-inst-150';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   cfg.save({ caps: { perProfileDaily: 10, instanceDaily: 150 }, daily: { date: today, count: 150 }, log: [] });
   try {
     await assert.rejects(jobs.enqueue(uid, { kind: 'review' }), e => e.code === 'cap',
@@ -119,7 +119,7 @@ const newWorkout = id => ({ ...sampleState().workouts[0], id, d: today, start: D
 test('a scheduled review reads a batch of workouts once, not once per tick', async () => {
   const uid = 'u-cadence';
   const S = sampleState({ coach: { ...sampleState().coach, cadence: { everyWorkouts: 1 } } });
-  writeState(DIR, uid, S);
+  await writeState(DIR, uid, S);
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
   process.env.FIXTURE_MODE = 'nochange';
   try {
@@ -139,7 +139,7 @@ test('a scheduled review reads a batch of workouts once, not once per tick', asy
 
     // A new workout is new news.
     S.workouts.push(newWorkout('w2'));
-    writeState(DIR, uid, S);
+    await writeState(DIR, uid, S);
     tick();
     assert.ok(jobs.status(uid).job, 'a fresh workout is due');
     await settle(uid);
@@ -156,7 +156,7 @@ test('a workout the phone dated tomorrow is not re-read once the review has cove
   const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
   const S = sampleState({ coach: { ...sampleState().coach, cadence: { everyWorkouts: 1 } } });
   S.workouts.push({ ...newWorkout('w-ahead'), d: tomorrow, start: Date.now() - 45 * 60000, end: Date.now() - 60000 });
-  writeState(DIR, uid, S);
+  await writeState(DIR, uid, S);
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
   process.env.FIXTURE_MODE = 'nochange';
   try {
@@ -174,7 +174,7 @@ test('a workout the phone dated tomorrow is not re-read once the review has cove
 test('an answer the model was paid for counts as the review, even when it was unusable', async () => {
   const uid = 'u-cadence-unusable';
   const S = sampleState({ coach: { ...sampleState().coach, cadence: { everyWorkouts: 1 } } });
-  writeState(DIR, uid, S);
+  await writeState(DIR, uid, S);
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
   process.env.FIXTURE_MODE = 'invalid';
   try {
@@ -189,7 +189,7 @@ test('an answer the model was paid for counts as the review, even when it was un
     // A call that never reached the model read nothing, so the same workouts are asked about again.
     process.env.FIXTURE_MODE = 'crash';
     S.workouts.push(newWorkout('w2'));
-    writeState(DIR, uid, S);
+    await writeState(DIR, uid, S);
     tick();
     await settle(uid);
     assert.equal(lastOutcome(uid).errorClass, 'provider');
@@ -204,7 +204,7 @@ test('an answer the model was paid for counts as the review, even when it was un
 test('a proposal nobody has answered is not replaced by the next scheduled review', async () => {
   const uid = 'u-cadence-pending';
   const S = sampleState({ coach: { ...sampleState().coach, cadence: { everyWorkouts: 1 } } });
-  writeState(DIR, uid, S);
+  await writeState(DIR, uid, S);
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
 
   tick();
@@ -213,7 +213,7 @@ test('a proposal nobody has answered is not replaced by the next scheduled revie
   assert.ok(first.pending, 'a proposal is waiting');
 
   S.workouts.push(newWorkout('w2'));
-  writeState(DIR, uid, S);
+  await writeState(DIR, uid, S);
   tick();
   assert.equal(jobs.status(uid).job, null, 'not while the proposal is unread');
   assert.equal(jobs.status(uid).pending.id, first.pending.id, 'the unread proposal is still the same one');

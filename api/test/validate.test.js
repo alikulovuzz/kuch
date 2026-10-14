@@ -13,7 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData } from './helpers.mjs';
 
-tempData();
+await tempData();
 const { validatePlan, validateReview, CHANGE_TYPES } = await import('../coach/core/validate.js');
 
 const PLAN = {

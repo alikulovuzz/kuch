@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { tempData, sampleState } from './helpers.mjs';
 
-tempData();
+await tempData();
 const payload = await import('../coach/core/payload.js');
 
 const HUGE = 'x'.repeat(200_000);

@@ -11,29 +11,31 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import webpush from 'web-push';
+import { dataHome, ON_PG } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
 
-function seedDir() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-health-'));
-  fs.writeFileSync(path.join(dir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dir, 'db.json'), JSON.stringify({
+async function seedHome(t) {
+  const home = await dataHome({ t, prefix: 'gym-health-', secret: SECRET, db: {
     users: [{ id: 'u_h_1', name: 'H', created: new Date().toISOString() }], creds: [], subs: [], invites: []
-  }));
+  } });
+  const dir = home.dir;
   // Boot writes this one if it is missing, which a read-only directory would refuse before the
   // server ever listened — the point here is a server that is up and cannot write, not one that
   // cannot start. The keys have to be real: web-push validates them at setVapidDetails.
   fs.writeFileSync(path.join(dir, 'vapid.json'), JSON.stringify(webpush.generateVAPIDKeys()));
-  return dir;
+  return home;
 }
+// On Postgres the answer also says whether the database answers.
+const database = ON_PG ? { database: 'ok' } : {};
 
-async function startServer(t, dataDir) {
+async function startServer(home) {
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
   });
-  t.after(() => { child.kill('SIGKILL'); fs.chmodSync(dataDir, 0o700); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   let log = '';
   // The boot line, not a health poll: the poll is what is under test here.
   const port = await new Promise((resolve, reject) => {
@@ -46,10 +48,10 @@ async function startServer(t, dataDir) {
 }
 
 test('a writable data directory answers 200, and says so', async t => {
-  const h = await startServer(t, seedDir());
+  const h = await startServer(await seedHome(t));
   const r = await fetch(`${h.api}/api/health`);
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { ok: true, users: 1, writable: true });
+  assert.deepEqual(await r.json(), { ok: true, users: 1, writable: true, ...database });
 });
 
 test('a data directory the server cannot write to is 503, not healthy', async t => {
@@ -57,14 +59,15 @@ test('a data directory the server cannot write to is 503, not healthy', async t 
     t.skip('running as root: a mode that denies writes does not deny them to root');
     return;
   }
-  const dir = seedDir();
-  const h = await startServer(t, dir);
+  const home = await seedHome(t);
+  const dir = home.dir;
+  const h = await startServer(home);
 
   // Denied before the first poll, so nothing has been probed — or cached — yet.
   fs.chmodSync(dir, 0o500);                       // r-x: the mount came back read-only
   const r = await fetch(`${h.api}/api/health`);
   assert.equal(r.status, 503, 'wget --spider reads this as unhealthy, which is the point');
-  assert.deepEqual(await r.json(), { ok: false, writable: false });
+  assert.deepEqual(await r.json(), { ok: false, writable: false, ...database });
   // The child's stderr is a pipe of its own, with no ordering guarantee against the socket the
   // answer came back on — the line can land after the fetch resolves, and did in 1 run of 130.
   for (let i = 0; i < 100 && !/health: cannot write to/.test(h.log()); i++) await new Promise(r => setTimeout(r, 20));

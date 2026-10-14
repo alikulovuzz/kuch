@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { tempData, writeState, sampleState } from './helpers.mjs';
 
-const DIR = tempData();
+const DIR = await tempData();
 const cfg = await import('../coach/config.js');
 const jobs = await import('../coach/jobs.js');
 const payload = await import('../coach/core/payload.js');
@@ -42,13 +42,13 @@ const lastOutcome = uid => jobs.readUser(uid).history.at(-1);
 
 test('no consent, no job — the gate is on the server, not the screen', async () => {
   const uid = 'u-noconsent';
-  writeState(DIR, uid, sampleState({ coach: {} }));
+  await writeState(DIR, uid, sampleState({ coach: {} }));
   await assert.rejects(jobs.enqueue(uid, { kind: 'review' }), e => e.code === 'consent');
 });
 
 test('one job per profile at a time', async () => {
   const uid = 'u-single';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   await jobs.enqueue(uid, { kind: 'review' });
   await assert.rejects(jobs.enqueue(uid, { kind: 'review' }), e => e.code === 'busy');
   await settle(uid);
@@ -56,7 +56,7 @@ test('one job per profile at a time', async () => {
 
 test('the daily cap is enforced and reported as its own failure', async () => {
   const uid = 'u-cap';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   cfg.save({ caps: { perProfileDaily: 1, instanceDaily: 0 } });
   await jobs.enqueue(uid, { kind: 'review' });
   await settle(uid);
@@ -68,7 +68,7 @@ test('the daily cap is enforced and reported as its own failure', async () => {
 
 test('an answer that stays unusable fails cleanly and applies nothing', async () => {
   const uid = 'u-unusable';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   process.env.FIXTURE_MODE = 'invalid';
   await jobs.enqueue(uid, { kind: 'review' });
   const s = await settle(uid);
@@ -81,7 +81,7 @@ test('an answer that stays unusable fails cleanly and applies nothing', async ()
 
 test('a provider that crashes is reported, not retried behind the user\'s back', async () => {
   const uid = 'u-crash';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   process.env.FIXTURE_MODE = 'crash';
   await jobs.enqueue(uid, { kind: 'review' });
   await settle(uid);
@@ -94,7 +94,7 @@ test('a provider that crashes is reported, not retried behind the user\'s back',
 
 test('an expired proposal disappears on read rather than lingering forever', async () => {
   const uid = 'u-expire';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   await jobs.enqueue(uid, { kind: 'review' });
   await settle(uid);
   const rec = jobs.readUser(uid);
@@ -106,7 +106,7 @@ test('an expired proposal disappears on read rather than lingering forever', asy
 
 test('forgetting a profile leaves no server-side residue', async () => {
   const uid = 'u-forget';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   await jobs.enqueue(uid, { kind: 'review' });
   await settle(uid);
   jobs.clearUser(uid);
@@ -161,7 +161,7 @@ test('forgetting a profile mid-job cancels the call and frees its slot at once',
   try {
     p.use();
     const uid = 'u-forget-live';
-    writeState(DIR, uid, sampleState());
+    await writeState(DIR, uid, sampleState());
     await jobs.enqueue(uid, { kind: 'review' });
     await p.until(1);
     assert.equal(jobs.status(uid).job.state, 'running');
@@ -199,7 +199,7 @@ test('a runtime that cannot be cancelled still has its late answer discarded aft
   // The fixture CLI is a child process, and the abort signal means nothing to one: it runs to
   // its answer, which then has nobody to belong to.
   const uid = 'u-forget-spawned';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   const notified = [];
   jobs.setProposalHook(u => notified.push(u));
   try {
@@ -223,10 +223,10 @@ test('forgetting a profile whose job is still queued drops it before anything le
   try {
     p.use();
     // Two other profiles hold both execution slots, so the third waits.
-    for (const u of ['u-slot-1', 'u-slot-2']) { writeState(DIR, u, sampleState()); await jobs.enqueue(u, { kind: 'review' }); }
+    for (const u of ['u-slot-1', 'u-slot-2']) { await writeState(DIR, u, sampleState()); await jobs.enqueue(u, { kind: 'review' }); }
     await p.until(2);
     const uid = 'u-forget-queued';
-    writeState(DIR, uid, sampleState());
+    await writeState(DIR, uid, sampleState());
     await jobs.enqueue(uid, { kind: 'review' });
     assert.equal(jobs.status(uid).job.state, 'queued');
 
@@ -252,17 +252,17 @@ test('consent withdrawn, or the Coach switched off, while a job waits: no payloa
   const p = await holdingProvider();
   try {
     p.use();
-    for (const u of ['u-slot-3', 'u-slot-4']) { writeState(DIR, u, sampleState()); await jobs.enqueue(u, { kind: 'review' }); }
+    for (const u of ['u-slot-3', 'u-slot-4']) { await writeState(DIR, u, sampleState()); await jobs.enqueue(u, { kind: 'review' }); }
     await p.until(2);
-    writeState(DIR, 'u-revoked', sampleState());
-    writeState(DIR, 'u-switched-off', sampleState());
+    await writeState(DIR, 'u-revoked', sampleState());
+    await writeState(DIR, 'u-switched-off', sampleState());
     await jobs.enqueue('u-revoked', { kind: 'review' });
     await jobs.enqueue('u-switched-off', { kind: 'review' });
     assert.equal(jobs.status('u-switched-off').job.state, 'queued');
 
     // Consent gone from the synced state — no forget call, so the record itself stays and says
     // what happened. Then the admin switches the Coach off before a slot frees.
-    writeState(DIR, 'u-revoked', sampleState({ coach: {} }));
+    await writeState(DIR, 'u-revoked', sampleState({ coach: {} }));
     cfg.save({ enabled: false });
     p.answer(NOCHANGE);
     await settle('u-revoked'); await settle('u-switched-off');
@@ -288,7 +288,7 @@ test('a payload bigger than any real history is refused before the provider is c
       ex: [{ id: '0001', sets: 3, reps: 10, weight: 20 }, { id: '0007', sets: 3, sec: 45, mode: 'time' }]
     }));
     assert.ok(JSON.stringify(payload.build(S, { handle: 'h'.repeat(16), kind: 'review' })).length > payload.MAX_PAYLOAD_CHARS);
-    writeState(DIR, uid, S);
+    await writeState(DIR, uid, S);
     const before = cfg.load().log.length;
     await jobs.enqueue(uid, { kind: 'review' });
     await settle(uid);
@@ -300,7 +300,7 @@ test('a payload bigger than any real history is refused before the provider is c
     assert.match(line.detail, /^payload of \d+k characters$/);
 
     // The ordinary state next to it still goes out.
-    writeState(DIR, 'u-toolarge-ok', sampleState());
+    await writeState(DIR, 'u-toolarge-ok', sampleState());
     await jobs.enqueue('u-toolarge-ok', { kind: 'review' });
     await p.until(1);
     p.answer(NOCHANGE);
@@ -346,7 +346,7 @@ test('the fingerprint covers every field canonicalPlan reports, including the v1
 
 test('a review job produces a checked change-set, and nothing is left unvalidated', async () => {
   const uid = 'u-review';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   await jobs.enqueue(uid, { kind: 'review' });
   const s = await settle(uid);
 
@@ -361,7 +361,7 @@ test('a review job produces a checked change-set, and nothing is left unvalidate
 
 test('a create job produces a bundle the client can merge unchanged', async () => {
   const uid = 'u-create';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   await jobs.enqueue(uid, { kind: 'create' });
   const s = await settle(uid);
 
@@ -377,7 +377,7 @@ test('a create job produces a bundle the client can merge unchanged', async () =
 
 test('a well-formed answer naming an exercise nobody has is refused, twice, and applies nothing', async () => {
   const uid = 'u-ghostex';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   // Not garbage: it parses, and it claims the right contract. Only the validator objects —
   // which is the whole point of the validator being the boundary rather than the parser.
   process.env.FIXTURE_MODE = 'unknown-exercise';
@@ -392,7 +392,7 @@ test('a well-formed answer naming an exercise nobody has is refused, twice, and 
 
 test('the one repair round rescues an answer the validator rejected', async () => {
   const uid = 'u-repair';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   process.env.FIXTURE_MODE = 'invalid-then-valid';
   await jobs.enqueue(uid, { kind: 'review' });
   const s = await settle(uid);
@@ -405,7 +405,7 @@ test('the one repair round rescues an answer the validator rejected', async () =
 
 test('"nothing to change" keeps the reason it gave, and proposes nothing', async () => {
   const uid = 'u-nochange';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   process.env.FIXTURE_MODE = 'nochange';
   await jobs.enqueue(uid, { kind: 'review' });
   const s = await settle(uid);
@@ -418,7 +418,7 @@ test('"nothing to change" keeps the reason it gave, and proposes nothing', async
 
 test('a refine carries the plan it is refining, and counts as the next iteration', async () => {
   const uid = 'u-refine';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   await jobs.enqueue(uid, { kind: 'create' });
   const first = await settle(uid);
   assert.equal(first.pending.iteration, 1);
@@ -444,7 +444,7 @@ test('the admin test-run completes a round trip without a user to spend', async 
 
 test('a job is refused outright when the privilege drop cannot be performed', async () => {
   const uid = 'u-priv';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   // The refusal is the assertion, so it is pinned rather than hoped for: this used to skip
   // itself on any host where the drop happened to work, which is every host where the control
   // matters least.
@@ -476,7 +476,7 @@ test('an HTTPS provider is not refused for lacking a privilege drop, and runs en
   const base = `http://127.0.0.1:${server.address().port}`;
 
   const uid = 'u-https';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   cfg.save({ enabled: true, provider: 'compatible', providerOptions: { compatible: { baseUrl: base } }, models: { compatible: 'local-model' } });
   forcePrivilegeVerdict({ ok: false, dropped: false, why: 'no `coach` user exists in this image' });
   try {
@@ -494,7 +494,7 @@ test('an HTTPS provider is not refused for lacking a privilege drop, and runs en
 
     // And the same host refuses a runtime-backed provider, so the gate itself is intact.
     cfg.save({ provider: 'fixture' });
-    writeState(DIR, 'u-https-2', sampleState());
+    await writeState(DIR, 'u-https-2', sampleState());
     await assert.rejects(jobs.enqueue('u-https-2', { kind: 'review' }), e => e.code === 'unprivileged');
   } finally {
     forcePrivilegeVerdict({ ok: true, dropped: false, why: 'pinned by the test suite' });
@@ -521,7 +521,7 @@ test('a note is truncated to the admin\'s configured max, not clipped to the old
   const base = `http://127.0.0.1:${server.address().port}`;
 
   const uid = 'u-note-len';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   cfg.save({
     enabled: true, provider: 'compatible', providerOptions: { compatible: { baseUrl: base } },
     models: { compatible: 'local-model' }, maxMessageLen: 2500
@@ -559,7 +559,7 @@ test('a job sends the admin\'s configured output cap, so a reasoning model is no
   const base = `http://127.0.0.1:${server.address().port}`;
 
   const uid = 'u-max-output';
-  writeState(DIR, uid, sampleState());
+  await writeState(DIR, uid, sampleState());
   cfg.save({
     enabled: true, provider: 'compatible', providerOptions: { compatible: { baseUrl: base } },
     models: { compatible: 'local-model' }, maxOutputTokens: 48000

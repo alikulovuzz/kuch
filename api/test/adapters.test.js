@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData } from './helpers.mjs';
 
-tempData();
+await tempData();
 const { adapterFor, default: ADAPTERS } = await import('../coach/adapters/index.js');
 const { LOCKDOWN } = await import('../coach/adapters/claude.js');
 const { argvFor } = await import('../coach/adapters/codex.js');

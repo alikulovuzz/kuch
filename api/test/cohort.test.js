@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData, writeState, sampleState } from './helpers.mjs';
 
-const DIR = tempData();
+const DIR = await tempData();
 const cfg = await import('../coach/config.js');
 const jobs = await import('../coach/jobs.js');
 const cohort = await import('../coach/cohort.js');
@@ -25,11 +25,11 @@ const lifter = (w1, w2, { unit = 'kg', weeks = 4 } = {}) => sampleState({
 const e = (w, r) => w * (1 + Math.min(r, 12) / 30);
 
 cfg.save({ enabled: true, provider: 'fixture', community: true });
-writeState(DIR, 'a', lifter(100, 40));
-writeState(DIR, 'b', lifter(80, 30));
-writeState(DIR, 'c', lifter(60, null));
-writeState(DIR, 'd', lifter(220, 88, { unit: 'lb', weeks: 8 }));   // ≈ 100 kg / 40 kg
-writeState(DIR, 'quiet', lifter(500, 500));                         // never opts in
+await writeState(DIR, 'a', lifter(100, 40));
+await writeState(DIR, 'b', lifter(80, 30));
+await writeState(DIR, 'c', lifter(60, null));
+await writeState(DIR, 'd', lifter(220, 88, { unit: 'lb', weeks: 8 }));   // ≈ 100 kg / 40 kg
+await writeState(DIR, 'quiet', lifter(500, 500));                         // never opts in
 
 test('a profile that does not share sees nothing, whatever the others do', async () => {
   assert.deepEqual(await cohort.computeCohort('a'), { ok: false, enabled: true, sharing: false });
@@ -121,9 +121,9 @@ test('three accounts that log the same made-up exercise cannot write into a four
       { id: 'c' + 'k7x2', sets: [{ w: 50, r: 5, done: true }] }   // a custom id they all happen to share
     ] }]
   });
-  for (const uid of ['x1', 'x2', 'x3']) { writeState(DIR, uid, attacker()); jobs.setShare(uid, true); }
+  for (const uid of ['x1', 'x2', 'x3']) { await writeState(DIR, uid, attacker()); jobs.setShare(uid, true); }
   const victim = lifter(70, 30);
-  writeState(DIR, 'victim', victim);
+  await writeState(DIR, 'victim', victim);
   jobs.setShare('victim', true);
 
   const room = await cohort.cohortForPayload('victim');

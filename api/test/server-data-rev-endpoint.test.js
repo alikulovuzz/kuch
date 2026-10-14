@@ -16,6 +16,7 @@ import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const SECRET = 'test-secret-rev-endpoint';
@@ -23,11 +24,10 @@ const uid = 'u_rev_1';
 const cookie = () => { const p = `${uid}:${Date.now() + 86400000}:0`; return `gymsid=${p}.${crypto.createHmac('sha256', SECRET).update(p).digest('base64url')}`; };
 
 test('GET /api/data/rev tracks PUT /api/data', async t => {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-rev-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: [{ id: uid, name: 'R', created: new Date().toISOString() }], creds: [], subs: [], invites: [] }));
-  const child = spawn(process.execPath, ['server.js'], { cwd: API, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  const home = await dataHome({ t, prefix: 'gym-rev-', secret: SECRET, db: { users: [{ id: uid, name: 'R', created: new Date().toISOString() }], creds: [], subs: [], invites: [] } });
+  const dataDir = home.dir;
+  const child = spawn(process.execPath, ['server.js'], { cwd: API, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' } });
+  home.own(child);
 
   // The boot line carries the port the listener actually bound, so there is no window in which
   // anything else could be holding it — the server is listening by the time it is printed.

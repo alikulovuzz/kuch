@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { tempData } from './helpers.mjs';
 
-tempData();
+await tempData();
 const cfg = await import('../coach/config.js');
 const { coachRoutes } = await import('../coach/routes.js');
 
@@ -167,7 +167,7 @@ test('a debrief is enqueued as its own kind, and the cohort routes gate on the a
   const { writeState, sampleState } = await import('./helpers.mjs');
   const { forcePrivilegeVerdict } = await import('../coach/adapters/spawn.js');
   forcePrivilegeVerdict({ ok: true, dropped: false, why: 'pinned by the test suite' });
-  writeState(process.env.DATA_DIR, 'admin-1', sampleState());
+  await writeState(process.env.DATA_DIR, 'admin-1', sampleState());
   const { call } = harness();
 
   const off = await call('GET /api/coach/cohort');
@@ -204,7 +204,7 @@ test('a debrief is enqueued as its own kind, and the cohort routes gate on the a
 
   // A profile with nothing logged cannot be debriefed.
   jobs.resolvePending('admin-1', { accepted: ['debrief'] });
-  writeState(process.env.DATA_DIR, 'admin-1', sampleState({ workouts: [] }));
+  await writeState(process.env.DATA_DIR, 'admin-1', sampleState({ workouts: [] }));
   await call('POST /api/coach/debrief', {});
   while (jobs.status('admin-1').job && Date.now() < until) await new Promise(res => setTimeout(res, 25));
   assert.equal(jobs.status('admin-1').last.errorClass, 'noworkout');
