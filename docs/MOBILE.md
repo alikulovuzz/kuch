@@ -270,9 +270,12 @@ A signed APK, when one is published, is attached to
 Android asks you to allow installs from the browser the first time — that's standard for any
 app outside the Play Store. Check the `.sha256` if you got the file from anywhere else.
 
-Kuch has no APK build pipeline of its own yet: openGym's signed builds came from a `build:apk`
-job in its GitLab CI, which this fork does not run. Until there is one, build and sign the APK
-yourself as shown below.
+The APK is built by `.github/workflows/android.yml`. A push to `main`, a `v*` tag or a manual
+run builds it signed with the release keystore from the repository secrets (the workflow's header
+lists the four); a pull request or a fork builds it unsigned, which only proves the build. Either
+way the run's artifact holds `kuch-<version>.apk` (or `-unsigned.apk`) and its `.sha256`. A tag
+on `alikulovuzz/kuch` without the secrets fails rather than ship an APK nobody can install.
+Locally, build and sign it yourself as shown below.
 
 The release APK carries native code for ARM only (`arm64-v8a`, `armeabi-v7a`), which is every
 phone; the x86 builds of the barcode scanner's library would add about 12 MB for emulators
@@ -338,8 +341,8 @@ membership, the distribution certificate and profile as protected file variables
 
 - Bump `versionName`/`versionCode` in `android/app/build.gradle` per release; keep them in
   step with `frontend/package.json`. `versionCode` must strictly increase or updates won't
-  install over an existing APK. The APK is *named* from `frontend/package.json` (the CI job
-  reads `version` out of it), so the two drifting apart shows up as a misnamed file.
+  install over an existing APK. The APK is *named* from `frontend/package.json` (the
+  workflow reads `version` out of it), so the two drifting apart shows up as a misnamed file.
 - Tagging `vX.Y.Z` is what ships everything: images, APK, release notes. Don't push a version
   tag you don't mean to release — `v*` tags are protected for that reason.
 - **License:** Kuch is AGPL-3.0, which by itself sits badly with app-store terms of
