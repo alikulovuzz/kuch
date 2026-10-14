@@ -3,12 +3,13 @@
 A [Model Context Protocol](https://modelcontextprotocol.io) bridge that lets an external LLM
 application (Claude Desktop, Cursor, Cline, Continue, etc.) read your Kuch profile —
 routines, workouts, body-weight log, estimated 1RMs, and muscle balance — directly from your
-self-hosted `./data` directory.
+self-hosted `./data` directory, or from the PostgreSQL database when the API runs on
+`STORAGE_BACKEND=postgres`.
 
-It is read-only, runs locally as a stdio process spawned by the LLM client, adds no new
-container, and requires no extra authentication. The LLM never sees passkeys, VAPID keys, or
-session secrets — it can only read the same `state-<uid>.json` files the Kuch api already
-writes.
+It is read-only, runs locally as a stdio process spawned by the LLM client, and adds no new
+container. The LLM never sees passkeys, VAPID keys, or session secrets — it can only read the
+same training document the Kuch api already writes (`state-<uid>.json`, or the `user_state`
+table on Postgres).
 
 The numbers it answers with are computed by the **same pure functions the React UI uses**
 (`frontend/src/lib/*.js`) — `estimate1RM`, `loadOfWorkouts`, `effectiveRoutine`, etc. — so a
@@ -68,6 +69,53 @@ For Cursor and other MCP-compatible clients, see the client's MCP docs — the s
 Restart the client; you should see the Kuch tools appear with "serving profile \<name\>" on
 the server's stderr.
 
+### When the API runs on Postgres
+
+Once the API runs on `STORAGE_BACKEND=postgres`, nothing writes `./data` any more. Point the MCP
+server at the database instead by setting `KUCH_DATABASE_URL` (`DATABASE_URL` is read when it is
+unset). It then reads the `user_state` and `users` tables and ignores `KUCH_DATA`. A profile is
+re-read when its `rev` moves, which the API bumps on every save, so a session logged a moment ago
+shows up on the next tool call.
+
+Give it a role of its own that can read only what it needs: the training document and each
+profile's id, name and creation date. It never sees credentials, e-mail addresses, password
+hashes or push subscriptions, and it cannot write. Run this as the database owner, in the
+database and schema the API uses:
+
+```sql
+CREATE ROLE kuch_mcp LOGIN PASSWORD '<a password of its own>';
+GRANT CONNECT ON DATABASE kuch TO kuch_mcp;
+GRANT USAGE ON SCHEMA public TO kuch_mcp;          -- the schema holding the API's tables
+GRANT SELECT ON user_state TO kuch_mcp;
+GRANT SELECT (id, name, created) ON users TO kuch_mcp;
+```
+
+Then give the client that role's URL, never the API's own `DATABASE_URL` (that one can write):
+
+```jsonc
+{
+  "mcpServers": {
+    "kuch": {
+      "command": "node",
+      "args": ["/absolute/path/to/kuch/mcp/src/index.js"],
+      "env": {
+        "KUCH_DATABASE_URL": "postgres://kuch_mcp:<password>@localhost:5432/kuch",
+        "KUCH_UID": "<your-uid>"   // optional — auto-detected if the database holds one profile
+      }
+    }
+  }
+}
+```
+
+The database has to be reachable from the machine the LLM client runs on. The profile ids are in
+`SELECT id, name FROM users`. The URL may carry the role's password: the server never prints it,
+and it says "from Postgres" on its startup line instead.
+
+The migration to Postgres leaves `./data` in place and drops a `MIGRATED-TO-POSTGRES` file in
+it. A server still configured for files refuses to answer while that file is there, and tells
+you to set `KUCH_DATABASE_URL`, rather than quietly serve the data as it was on the day you
+switched.
+
 ## Tools
 
 Nine read-only tools in v1:
@@ -110,13 +158,15 @@ dependencies landed in `frontend/`, no public exports changed.
 
 ## Design constraints honoured
 
-- **One runtime dependency beyond the MCP SDK:** none. No database driver, no HTTP framework.
+- **Three runtime dependencies:** the MCP SDK, `zod`, and `pg` (the same Postgres driver the API
+  uses) for Postgres mode. No HTTP framework.
 - **No new container.** stdio transport is spawned by the LLM client; nothing to add to
   `docker-compose.yml`.
-- **No new auth.** The filesystem is the boundary — same as `docker compose` running on the
-  user's box. No passkey material, VAPID keys, or session secrets ever cross it.
-- **No telemetry, no network.** Reads `./data/*.json` and exits when the LLM client
-  disconnects.
+- **No new auth.** In file mode the filesystem is the boundary — same as `docker compose`
+  running on the user's box. In Postgres mode it is a database role that can read two tables
+  and nothing else. No passkey material, VAPID keys, or session secrets ever cross either.
+- **No telemetry.** Reads `./data/*.json`, or the database you point it at and nothing else,
+  and exits when the LLM client disconnects.
 
 ## Tests
 
@@ -130,6 +180,13 @@ missing routine, zero-workout history, no synced state, superset links, three 1R
 "Today" is pinned via `vi.useFakeTimers({ now: ..., toFake: ['Date'] })` so date-dependent
 tools see consistent values regardless of when the suite runs. The pure lib functions have
 their own 92 tests in `frontend/src/lib/*.test.js`.
+
+The Postgres-mode tests (`test/state-pg.test.js`) need a database to make throwaway schemas in,
+built by the API's own migrations; they are skipped with a message when it is not set:
+
+```bash
+DATABASE_URL_TEST=postgres://user:pass@localhost:5432/kuch_test npm test
+```
 
 ## Roadmap
 
