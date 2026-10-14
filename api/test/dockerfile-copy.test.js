@@ -42,3 +42,10 @@ test('every directory server.js imports from has its own COPY line', () => {
   const missing = [...dirs].filter(d => !lines.some(l => new RegExp(`^COPY\\s+${d}\\s+\\./${d}\\s*$`).test(l.trim())));
   assert.deepEqual(missing, [], `add COPY ${missing.join(', ')} to api/Dockerfile`);
 });
+
+// Read from disk rather than imported, so the walks above cannot see it: without the SQL files the
+// Postgres backend refuses to start on a fresh database, and only in the image.
+test('the migrations the Postgres backend runs at startup are in the image', () => {
+  assert.match(read('store/pg.js'), /'\.\.', 'migrations'/, 'store/pg.js still reads api/migrations');
+  assert.ok(read('Dockerfile').split('\n').some(l => /^COPY\s+migrations\s+\.\/migrations\s*$/.test(l.trim())), 'add COPY migrations ./migrations to api/Dockerfile');
+});
