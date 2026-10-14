@@ -37,6 +37,16 @@ spec:
             # ALLOW_GUEST, DEFAULT_LANG, PASSWORD_LOGIN, the push keys, ...) goes here the
             # same way. FIRST_USER_ADMIN="1" makes the first profile created on an empty
             # instance its admin (off by default).
+            # PostgreSQL instead of the JSON files on the volume: uncomment these two together
+            # with postgres.yaml in kustomization.yaml, and migrate existing data before the API
+            # first starts on it (docs/SELF_HOSTING_KUBERNETES.md, docs/POSTGRES_MIGRATION.md).
+            # - name: STORAGE_BACKEND
+            #   value: postgres
+            # - name: DATABASE_URL
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: kuch-postgres
+            #       key: DATABASE_URL
             # TRUST_PROXY is left off on purpose: the web container overwrites X-Forwarded-For
             # with the address it was reached from, which here is the gateway's pod, so turning
             # it on changes nothing for the sign-in throttle — while any pod in the cluster that

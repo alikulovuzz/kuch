@@ -6,8 +6,16 @@ media/gif/
 # Runtime data — users, passkeys, per-user state, session secret
 data/
 
-# Local config
+# Local config. .env holds POSTGRES_PASSWORD and may hold a DATABASE_URL with credentials, so
+# variants of it are ignored too.
 .env
+.env.*
+!.env.example
+
+# Backups as docs/SELF_HOSTING.md and docs/POSTGRES_MIGRATION.md name them: everyone's data
+kuch-backup-*
+kuch-db-*
+*.dump
 
 # Build output / deps
 frontend/dist/

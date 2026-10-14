@@ -4,9 +4,10 @@ Example manifests for a small cluster, contributed from a K3s setup with the Gat
 cert-manager. Read [SELF_HOSTING.md](SELF_HOSTING.md) first: the passkey requirement (HTTPS,
 `RP_ID`, `ORIGIN`), the settings in `.env.example` and the backup advice apply here unchanged.
 
-Kuch is pretty simple — a frontend and an API backend. The API keeps everything in plain JSON
-files on a volume. The exercise pictures and animations are part of the web image, so nothing is
-downloaded at start-up. There are only a few resources to create:
+Kuch is pretty simple — a frontend and an API backend. By default the API keeps everything in
+plain JSON files on a volume; it can keep accounts and training data in PostgreSQL instead
+([below](#postgresql)). The exercise pictures and animations are part of the web image, so nothing
+is downloaded at start-up. There are only a few resources to create:
 
 - 1 PVC: `kuch-data` (users, passkeys, workouts, uploads, **back this one up**).
 - 1 Deployment running the API and the web container in a single pod, for simplicity. It stays at
@@ -58,3 +59,44 @@ Notes:
   overwrites whatever a client sent; pass that through with `CF_CONNECTING_IP` on the `web`
   container (as `.env.example` describes for Cloudflare), turn on `TRUST_PROXY=1` on the `api`
   container, and add a NetworkPolicy so only the web container's pod reaches port 3000.
+
+## PostgreSQL
+
+`kubernetes/postgres.yaml` runs PostgreSQL 17 as a one-replica StatefulSet with its own 2 Gi
+volume, behind the `kuch-postgres` Service. It is not applied by default. To switch to it:
+
+1. Create the Secret with the password and the URL the API connects with. Use letters and digits
+   only for the password, since it goes into a URL, and keep it out of git:
+
+   ```bash
+   PW=$(openssl rand -hex 24)
+   kubectl -n fitness create secret generic kuch-postgres \
+     --from-literal=POSTGRES_PASSWORD="$PW" \
+     --from-literal=DATABASE_URL="postgres://kuch:$PW@kuch-postgres:5432/kuch"
+   ```
+
+2. Uncomment `- postgres.yaml` in `kubernetes/kustomization.yaml`. In `kubernetes/deployment.yaml`,
+   uncomment `STORAGE_BACKEND` and `DATABASE_URL` in the `api` container's env.
+3. **An instance that already has data:** migrate it before the API first starts on PostgreSQL,
+   or it comes up as an empty, fresh instance. Follow
+   [POSTGRES_MIGRATION.md](POSTGRES_MIGRATION.md#on-kubernetes). A new instance can go straight to
+   `kubectl apply -k kubernetes/`.
+
+Notes:
+
+- `kuch-data` stays: `secret`, `vapid.json`, `coach.json`, `audit.log` and `uploads/` are files on
+  either backend. Back up both volumes. For the database that means `pg_dump`, not a copy of the
+  volume ([SELF_HOSTING.md §6](SELF_HOSTING.md#6-backups)):
+
+  ```bash
+  kubectl -n fitness exec kuch-postgres-0 -- pg_dump -U kuch -d kuch -Fc > kuch-db-$(date +%F).dump
+  ```
+
+- The API still runs as **one replica** with `Recreate`. On PostgreSQL that is enforced as well:
+  the API holds a database lock while it runs, and a second API process on the same database
+  refuses to start.
+- `/api/health` answers 503 while the database is unreachable, so the probes take the API out of
+  service and, after a while, restart it. It comes back by itself once the database answers.
+- A managed or existing PostgreSQL works the same way: leave `postgres.yaml` out and put that
+  server's URL in the Secret's `DATABASE_URL`. The role needs to be able to create tables in its
+  database (its owner can), because the API creates and upgrades the schema at startup.

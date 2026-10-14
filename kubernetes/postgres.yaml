@@ -1,0 +1,84 @@
+# PostgreSQL for STORAGE_BACKEND=postgres: one replica, its data on its own volume. Not applied
+# unless you list it in kustomization.yaml, after creating the kuch-postgres Secret that holds the
+# password (docs/SELF_HOSTING_KUBERNETES.md). The API pod reaches it as kuch-postgres:5432.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kuch-postgres
+spec:
+  clusterIP: None
+  ports:
+    - name: postgres
+      port: 5432
+      protocol: TCP
+      targetPort: postgres
+  selector:
+    app: kuch-postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app: kuch-postgres
+  name: kuch-postgres
+spec:
+  serviceName: kuch-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kuch-postgres
+  template:
+    metadata:
+      labels:
+        app: kuch-postgres
+    spec:
+      containers:
+        - name: postgres
+          # Major version pinned, as in docker-compose.yml: the next one needs a dump and a restore.
+          image: postgres:17
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              value: kuch
+            - name: POSTGRES_DB
+              value: kuch
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kuch-postgres
+                  key: POSTGRES_PASSWORD
+            # A directory below the mount: a fresh volume's root can hold lost+found, and initdb
+            # refuses a directory that is not empty.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+              protocol: TCP
+          # Over TCP: while a new database is initialised the image serves on the socket only.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "kuch", "-d", "kuch"]
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "kuch", "-d", "kuch"]
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
