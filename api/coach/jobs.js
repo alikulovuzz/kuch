@@ -27,6 +27,7 @@ import { handleFor } from './handle.js';
 import { fetchFor } from './node-fetch.js';
 import { canDropPrivileges, unprivilegedIds } from './adapters/spawn.js';
 import { cohortForPayload, invalidate as invalidateCohort } from './cohort.js';
+import { store } from '../store/index.js';
 
 // The prompt assembly, the plan fingerprint and the invoke→parse→validate→repair loop all
 // live in ./core now, where the phone can import them too. Re-exported so nothing that
@@ -83,11 +84,7 @@ export function clearUser(uid) {
 }
 
 /** Every profile with a state file — the population a cohort is drawn from. */
-export function listUserIds() {
-  try {
-    return fs.readdirSync(DATA).filter(f => /^state-[a-zA-Z0-9_-]+\.json$/.test(f)).map(f => f.slice(6, -5));
-  } catch { return []; }
-}
+export const listUserIds = () => store.listStateUids();
 
 /* ---------- "compare with others" opt-in ----------
    Held here, in the server's own per-profile record, rather than in the synced state: the
@@ -100,10 +97,8 @@ export function setShare(uid, share) {
   return !!share;
 }
 
-export function readState(uid) {
-  try { return JSON.parse(fs.readFileSync(path.join(DATA, 'state-' + safe(uid) + '.json'), 'utf8')); }
-  catch { return null; }
-}
+// The server's own store (store/index.js): the Coach only ever reads a profile's document.
+export const readState = uid => store.readState(uid);
 
 /* ---------- caps ---------- */
 
