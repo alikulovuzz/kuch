@@ -2,8 +2,43 @@
 
 > **Stub.** This page will hold the step-by-step cutover from the JSON files to PostgreSQL
 > (stop the API, back up `data/`, dry-run, migrate, verify, switch, smoke test, roll back). The
-> migration script and the cutover steps are still being written. Until then, this page explains
-> how the Postgres backend stores data and what it assumes.
+> cutover steps are still being written. Until then, this page explains the migration script, how
+> the Postgres backend stores data, and what it assumes.
+
+## Migrating the JSON files
+
+`api/scripts/migrate-json-to-pg.mjs` copies `db.json` and every `state-<uid>.json` under
+`DATA_DIR` into the database `DATABASE_URL` names. Stop the API first. The script refuses to run
+while an API is using the database.
+
+```bash
+docker compose run --rm api node scripts/migrate-json-to-pg.mjs --dry-run
+docker compose run --rm api node scripts/migrate-json-to-pg.mjs
+```
+
+- It writes everything in **one transaction** and verifies it before committing. Every table's row
+  count must match the files, the accounts must read back equal to `db.json`, and every stored
+  document must equal its file, with `rev` and `wid` matching its `_rev` and `_wid`. Anything else
+  rolls back, prints what differs and exits 1.
+- `--dry-run` does the same, prints the counts and the verdict, and rolls back.
+- Running it again writes nothing and verifies again.
+- It never changes or deletes a JSON file. A state file it cannot read, that has no profile in
+  `db.json`, or that holds text Postgres cannot store (U+0000, a lone surrogate) is reported and
+  skipped. A `db.json` the tables cannot hold as it is (a passkey of a profile that does not
+  exist, say) is refused whole, with the reasons.
+- `--from-bak` migrates `db.json.bak` when `db.json` cannot be read. Without the flag, the script
+  stops instead.
+- A database that already holds other data than the files (for example, after going back to the
+  files for a while) is only overwritten with `--replace`, which also deletes the rows the files no
+  longer have.
+- After a committed run it writes `DATA_DIR/MIGRATED-TO-POSTGRES`, which says when the migration
+  ran and what it copied. The MCP server in file mode refuses to answer while that file exists.
+  While it exists the script never overwrites a database that differs from the files, `--replace`
+  or not: the API may have been running on Postgres since.
+
+**Rolling back** is `STORAGE_BACKEND=file` and a restart: the JSON files are as the migration left
+them. Delete `MIGRATED-TO-POSTGRES` at the same time. Anything written while the API ran on
+Postgres stays only in the database.
 
 ## Switching it on
 

@@ -43,6 +43,18 @@ test('every directory server.js imports from has its own COPY line', () => {
   assert.deepEqual(missing, [], `add COPY ${missing.join(', ')} to api/Dockerfile`);
 });
 
+// The cutover runs the migration inside the image (`docker compose run --rm api node
+// scripts/migrate-json-to-pg.mjs`), so the script ships, and so does every api file it imports.
+test('the JSON-to-Postgres migration script and what it imports are in the image', () => {
+  const lines = read('Dockerfile').split('\n').map(l => l.trim());
+  assert.ok(lines.some(l => /^COPY\s+scripts\/migrate-json-to-pg\.mjs\s+\.\/scripts\/$/.test(l)), 'add COPY scripts/migrate-json-to-pg.mjs ./scripts/ to api/Dockerfile');
+  const copied = new Set(lines.find(l => /^COPY\s+server\.js\b/.test(l)).split(/\s+/).slice(1, -1));
+  for (const [, file] of read('scripts/migrate-json-to-pg.mjs').matchAll(/from\s+['"]\.\.\/([^'"]+)['"]/g)) {
+    const dir = file.includes('/') ? file.split('/')[0] : null;
+    assert.ok(dir ? lines.includes(`COPY ${dir} ./${dir}`) : copied.has(file), `the script imports ${file}, which the image does not carry`);
+  }
+});
+
 // Read from disk rather than imported, so the walks above cannot see it: without the SQL files the
 // Postgres backend refuses to start on a fresh database, and only in the image.
 test('the migrations the Postgres backend runs at startup are in the image', () => {
