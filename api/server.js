@@ -109,7 +109,7 @@ fs.mkdirSync(DATA, { recursive: true });
  * reason to refuse to boot. The privilege drop in adapters/spawn.js is the control that does
  * fail closed. */
 const lock = f => { try { fs.chmodSync(path.join(DATA, f), 0o600); } catch { /* not present yet, or host says no */ } };
-['secret', 'db.json', 'coach.json'].forEach(lock);
+['secret', 'db.json', 'coach.json'].forEach(lock); // storage-boundary-allow direct-storage-access: chmod only, never a read or write; it also covers a db.json left behind after a move to Postgres
 
 /* ---------- secret + db ---------- */
 const secretFile = path.join(DATA, 'secret');
@@ -342,7 +342,7 @@ async function sendPush(userId, payload, deviceId) {
   // unhandled rejection and take the process down. The row is already gone from db.subs in
   // memory, so only the copy on disk lags: the next saveDb() that succeeds, from any route,
   // writes it out, and a restart re-reads the old file and prunes it again on the next send.
-  if (dirty) { try { await saveDb(); } catch (e) { console.error('push: could not save db.json', e.message); } }
+  if (dirty) { try { await saveDb(); } catch (e) { console.error('push: could not save the pruned subscriptions', e.message); } }
 }
 
 // Rest-timer alerts: client schedules on start/extend, cancels on skip or on-screen completion —
