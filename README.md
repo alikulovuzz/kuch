@@ -181,6 +181,19 @@ on the phone, with native reminders and a rest countdown in the notification sha
 - **iPhone:** Apple doesn't allow installs outside the App Store. Self-host and add the PWA to your
   home screen from Safari, or build the native app onto your own device with Xcode.
 
+The app can also **connect to your own Kuch server** instead of keeping everything on the phone:
+
+- **Serve Kuch over HTTPS.** Pairing sends a one-time code and then a bearer token on every
+  request. The Android app does accept a plain `http://` address, but only use that on your own
+  home network, because nothing is encrypted. Signing in with a passkey in the browser needs
+  HTTPS anyway (`localhost` aside).
+- **Pair, don't sign in.** Passkeys can't work inside the app. In a browser that is already
+  signed in, open Settings → Account → **"Pair the mobile app"**, then enter the server address
+  and the code it shows under **"Connect to my server"** in the app.
+- **Set `RP_ID` and `ORIGIN` for good before anyone registers.** Use your real domain:
+  `RP_ID=kuch.example.com`, `ORIGIN=https://kuch.example.com`. Passkeys are bound to `RP_ID`, so
+  changing it later breaks every passkey already registered.
+
 Details and build instructions: [docs/MOBILE.md](docs/MOBILE.md).
 
 ## How it works

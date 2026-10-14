@@ -1,12 +1,13 @@
 {
   "name": "kuch-frontend",
   "private": true,
-  "version": "1.4.1",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:mobile": "VITE_MOBILE=1 vite build && node ../scripts/catalogue/stage-media.mjs dist && cap sync && node scripts/check-mobile-bundle.mjs",
+    "package:apk": "node scripts/package-apk.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
