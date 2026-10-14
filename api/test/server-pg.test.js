@@ -13,7 +13,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
-import { NO_PG, freshSchema } from './pg-helpers.mjs';
+import { NO_PG, PG_URL, freshSchema } from './pg-helpers.mjs';
 import { openStore } from '../store/index.js';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,14 +41,15 @@ function spawnServer(t, env) {
   return h;
 }
 
-// A schema with two profiles saved, and a server on it.
-async function startServer(t) {
+// A schema with two profiles saved (and the rows `more` adds to db), and a server on it.
+async function startServer(t, more = {}) {
   const pg = await freshSchema(t);
   const seed = openStore({ backend: 'postgres', url: pg.url });
   const db = await seed.loadDb();
   db.users.push({ id: ADMIN, name: 'Admin', created: new Date().toISOString(), admin: true },
     { id: ONE, name: 'One', created: new Date().toISOString() });
   db.creds.push({ id: 'c-one', userId: ONE, publicKey: 'x', counter: 0, transports: [] });
+  for (const [coll, rows] of Object.entries(more)) (db[coll] ||= []).push(...rows);
   await seed.saveDb(db);
   await seed.close();
 
@@ -138,19 +139,27 @@ test('health reports the database', { skip: NO_PG }, async t => {
   assert.deepEqual(await res.json(), { ok: true, users: 2, writable: true, database: 'ok' });
 });
 
-test('deleting a profile removes its rows by cascade and still removes its uploads', { skip: NO_PG }, async t => {
-  const h = await startServer(t);
+test('deleting a profile removes every row it owns, and still removes its uploads and Coach credential', { skip: NO_PG }, async t => {
+  const created = new Date().toISOString();
+  const h = await startServer(t, {
+    subs: [{ userId: ONE, endpoint: 'https://push.example.com/one', keys: { p256dh: 'p', auth: 'a' }, created },
+      { userId: ADMIN, endpoint: 'https://push.example.com/admin', keys: { p256dh: 'p', auth: 'a' }, created }],
+    deviceLinks: [{ h: 'd'.repeat(64), userId: ONE, exp: Date.now() + 600000, created: Date.now() }]
+  });
   await h.put({ unit: 'kg', workouts: [], routines: [] });
   fs.mkdirSync(path.join(h.dataDir, 'uploads', ONE), { recursive: true });
   fs.writeFileSync(path.join(h.dataDir, 'uploads', ONE, 'photo'), 'x');
+  fs.writeFileSync(path.join(h.dataDir, `coach-auth-${ONE}.json`), '{}');
 
   const res = await h.req('POST', '/api/admin/user/delete', { uid: ADMIN, body: { id: ONE } });
   assert.equal(res.status, 200);
   const count = async table => (await h.pg.query(`SELECT count(*)::int AS n FROM ${table} WHERE ${table === 'users' ? 'id' : table === 'user_state' ? 'uid' : 'user_id'} = $1`, [ONE])).rows[0].n;
-  assert.equal(await count('users'), 0);
-  assert.equal(await count('credentials'), 0);
-  assert.equal(await count('user_state'), 0);
+  for (const table of ['users', 'credentials', 'push_subscriptions', 'device_links', 'user_state']) {
+    assert.equal(await count(table), 0, table);
+  }
+  assert.deepEqual((await h.pg.query('SELECT user_id FROM push_subscriptions')).rows, [{ user_id: ADMIN }], 'the admin keeps theirs');
   assert.equal(fs.existsSync(path.join(h.dataDir, 'uploads', ONE)), false);
+  assert.equal(fs.existsSync(path.join(h.dataDir, `coach-auth-${ONE}.json`)), false);
   assert.equal((await h.req('GET', '/api/data')).status, 401, 'their session is over');
 });
 
@@ -161,10 +170,46 @@ test('a second server on the same database refuses to start', { skip: NO_PG }, a
   assert.match(second.log, /another kuch-api owns this database/);
 });
 
-test('a database that never answers stops the server, saying so', async t => {
-  const port = await new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
-  const h = spawnServer(t, { DATABASE_URL: `postgres://kuch:x@127.0.0.1:${port}/kuch`, DB_WAIT_MS: '600' });
+// A port nothing listens on, for now.
+const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
+
+test('a database that never answers is retried for DB_WAIT_MS, then stops the server, saying so', async t => {
+  const port = await freePort();
+  const started = Date.now();
+  const h = spawnServer(t, { DATABASE_URL: `postgres://kuch:x@127.0.0.1:${port}/kuch`, DB_WAIT_MS: '1500' });
   assert.equal(await h.exited, 1);
-  assert.match(h.log, /cannot reach the database/);
+  assert.ok(Date.now() - started >= 1500, 'it waited the time it was given');
+  assert.ok((h.log.match(/database not reachable yet/g) || []).length >= 2, `every retry is logged:\n${h.log}`);
+  assert.match(h.log, /kuch-api cannot start: cannot reach the database/);
   assert.doesNotMatch(h.log, /kuch-api on :/);
+});
+
+// A database that comes up while the server waits (a container started alongside it): the server
+// starts once it answers. It "comes up" as a proxy to the real one opening on the port the server
+// was given; a URL on that other port needs its password, which pgpass does not cover.
+const noPassword = PG_URL && !new URL(PG_URL).password && 'DATABASE_URL_TEST has no password, and pgpass does not cover the proxy port';
+test('a database that comes up during the wait is used: the server starts and serves', { skip: NO_PG || noPassword }, async t => {
+  const pg = await freshSchema(t);
+  const port = await freePort();
+  const url = new URL(pg.url);
+  const target = { host: url.hostname, port: +url.port || 5432 };
+  url.hostname = '127.0.0.1';
+  url.port = String(port);
+  const h = spawnServer(t, { DATABASE_URL: url.toString(), DB_WAIT_MS: '30000' });
+  while (!/database not reachable yet/.test(h.log) && h.child.exitCode === null) await new Promise(r => setTimeout(r, 50));
+
+  const sockets = new Set();
+  const proxy = net.createServer(client => {
+    const up = net.connect(target);
+    for (const s of [client, up]) { sockets.add(s); s.on('error', () => {}); s.on('close', () => sockets.delete(s)); }
+    client.pipe(up).pipe(client);
+  });
+  await new Promise(r => proxy.listen(port, '127.0.0.1', r));
+  t.after(() => { for (const s of sockets) s.destroy(); proxy.close(); });
+
+  const api = `http://127.0.0.1:${await boundPort(h.child, () => h.log)}`;
+  const health = await fetch(`${api}/api/health`);
+  assert.equal(health.status, 200);
+  assert.equal((await health.json()).database, 'ok');
+  assert.match(h.log, /database: applied migrations 001_init/);
 });

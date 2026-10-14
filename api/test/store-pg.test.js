@@ -117,6 +117,31 @@ test('a save writes only the rows that changed, and removes what is gone with wh
   assert.equal('settings' in fresh, false);
 });
 
+// What a hand-run DELETE in psql does: the database's own cascade, not the save's diff.
+test('deleting a profile by hand removes every row it owns, and only those', { skip: NO_PG }, async t => {
+  const pg = await freshSchema(t);
+  const store = await open(t, pg.url);
+  const db = await store.loadDb();
+  Object.assign(db, richDb());
+  db.deviceLinks.push({ h: 'e'.repeat(64), userId: 'u_z', exp: 1760000600000, created: 1760000000000 });
+  await store.saveDb(db);
+  for (const uid of ['u_z', 'u_a']) assert.equal(await store.casWriteState(uid, null, null, { _rev: 1, workouts: [] }), true);
+  const owned = async uid => {
+    const n = {};
+    for (const [table, col] of [['credentials', 'user_id'], ['push_subscriptions', 'user_id'], ['device_links', 'user_id'], ['user_state', 'uid']]) {
+      n[table] = (await pg.query(`SELECT count(*)::int AS n FROM ${table} WHERE ${col} = $1`, [uid])).rows[0].n;
+    }
+    return n;
+  };
+  assert.deepEqual(await owned('u_z'), { credentials: 1, push_subscriptions: 2, device_links: 1, user_state: 1 });
+
+  await pg.query('DELETE FROM users WHERE id = $1', ['u_z']);
+  assert.deepEqual(await owned('u_z'), { credentials: 0, push_subscriptions: 0, device_links: 0, user_state: 0 });
+  assert.deepEqual(await owned('u_a'), { credentials: 1, push_subscriptions: 0, device_links: 1, user_state: 1 }, 'the other profile keeps its own');
+  // Invites name profiles for the record only: the one Zed used stays used.
+  assert.deepEqual((await pg.query('SELECT code FROM invites WHERE used_by = $1', ['u_z'])).rows, [{ code: 'INV1' }]);
+});
+
 // The console lines a function printed with console.error.
 async function errorsOf(fn) {
   const lines = [];
