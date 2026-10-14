@@ -88,6 +88,25 @@ jobs:
 
   api:
     runs-on: ubuntu-latest
+    # The suite runs on both storage backends: the JSON files (npm test), then PostgreSQL (npm run
+    # test:pg, test/backend.mjs), every test on a throwaway schema of this database. The password
+    # is this job's own throwaway database's, not a secret.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: kuch
+          POSTGRES_PASSWORD: kuch
+          POSTGRES_DB: kuch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kuch -d kuch_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL_TEST: postgres://kuch:kuch@localhost:5432/kuch_test
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -102,6 +121,8 @@ jobs:
       - run: npm ci --omit=optional
         working-directory: api
       - run: npm test
+        working-directory: api
+      - run: npm run test:pg
         working-directory: api
       # The api's copy of the exercise catalogue is generated and committed. A dataset change
       # that forgets to regenerate it would otherwise only surface as "the Coach can't find
