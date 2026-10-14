@@ -31,6 +31,8 @@ signing.properties
 
 # Build output / deps
 frontend/dist/
+# release APKs + checksums (`npm run package:apk`); they go on the GitHub release, not in git
+dist-apk/
 node_modules/
 *.log
 .DS_Store

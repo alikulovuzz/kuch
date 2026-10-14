@@ -310,6 +310,16 @@ it with `apksigner verify --print-certs`. With any of the four missing it still 
 as above (it warns when only some are set). Use forward slashes in the path, also on Windows:
 `gradle.properties` reads a backslash as an escape.
 
+Then `npm run package:apk` (in `frontend/`) copies the signed APK to
+`dist-apk/kuch-<version>.apk` at the repo root, with a `kuch-<version>.apk.sha256` beside it
+that `sha256sum -c` accepts. It refuses an unsigned build. `dist-apk/` is gitignored; those two
+files are what goes on the GitHub release.
+
+On Windows, `build:mobile` needs a POSIX shell for its `VITE_MOBILE=1` prefix, and npm runs
+scripts in cmd.exe by default (even from Git Bash). Point it at Git's bash once with
+`npm config set script-shell "C:\Program Files\Git\bin\bash.exe"`, or pass
+`--script-shell=...` for a single run.
+
 ### iPhone — what's actually possible
 
 Apple does not allow installing apps outside the App Store, so there is no `.ipa` download
