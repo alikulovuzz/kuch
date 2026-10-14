@@ -15,11 +15,21 @@ services:
       target: ${API_TARGET:-default}
     restart: unless-stopped
     env_file: .env
+    depends_on:
+      # Only there with COMPOSE_PROFILES=postgres. `required: false` is what lets a stack on the
+      # JSON files leave the service out: otherwise compose refuses a dependency on a service
+      # whose profile is off. The api waits for the database itself as well (DB_WAIT_MS).
+      postgres:
+        condition: service_healthy
+        required: false
     environment:
       # The port the API listens on. web proxies to this same value, so the two
       # cannot drift — change it in .env and both follow.
       - PORT=${PORT:-3000}
       - DATA_DIR=/data
+      # Read only with STORAGE_BACKEND=postgres. Built from the POSTGRES_* values for the bundled
+      # service below; set DATABASE_URL in .env instead for a database somewhere else.
+      - DATABASE_URL=${DATABASE_URL:-postgres://${POSTGRES_USER:-kuch}:${POSTGRES_PASSWORD:-}@postgres:5432/${POSTGRES_DB:-kuch}}
       # The API is reachable only through the web container here, and that container overwrites
       # X-Forwarded-For / X-Real-IP with the real peer — so the sign-in throttle may count
       # requests by those headers instead of lumping everyone in as "the web container".
@@ -31,6 +41,34 @@ services:
       # is `tar czf … data/`, and a live refresh token must not end up inside it. Nothing here
       # needs backing up — if you lose it, sign the provider in again.
       - ./coach-auth:/coach-auth
+
+  # PostgreSQL, for STORAGE_BACKEND=postgres (docs/POSTGRES_MIGRATION.md). It runs only when .env
+  # sets COMPOSE_PROFILES=postgres, so an instance on the JSON files runs what it always ran.
+  # No port is published: the api reaches it over the compose network, nothing else does.
+  postgres:
+    # Major version pinned: moving to the next one means a dump and a restore, never just a pull.
+    image: postgres:17
+    profiles: [postgres]
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-kuch}
+      # Read when the database is first created. Empty, the image refuses to start. Not
+      # ${POSTGRES_PASSWORD:?}: compose checks that on every service, profile or not, so it would
+      # stop every stack on the JSON files too.
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-}
+      - POSTGRES_DB=${POSTGRES_DB:-kuch}
+    volumes:
+      # Not inside ./data, and `tar czf … data/` does not cover it: back it up with pg_dump
+      # (docs/SELF_HOSTING.md §6).
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Over TCP, not the socket: while the image initialises a new database it runs a server on
+      # the socket only, then restarts it, and that one must not count as ready.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # Builds the React frontend (multi-stage) and serves it, proxying /api → api
   # and the exercise animations, which are part of the image. Single origin for passkeys.
@@ -64,3 +102,6 @@ services:
       # The largest photo or video upload nginx passes to the API. Keep it above
       # MEDIA_VIDEO_MAX_MB (40 by default), which the api service reads from .env.
       - MEDIA_UPLOAD_MAX=${MEDIA_UPLOAD_MAX:-48m}
+
+volumes:
+  pgdata:
