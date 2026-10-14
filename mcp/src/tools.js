@@ -112,8 +112,8 @@ export const listRoutines = {
   name: 'list_routines',
   description: 'List the workout routines saved in the user\'s Kuch profile (the same list the Plan screen shows). Each routine is a named set of exercises with set/rep targets. Use this to discover the plan structure before diving into a specific routine or today\'s workout.',
   schema: {},
-  handler: () => {
-    const S = getState()
+  handler: async () => {
+    const S = await getState()
     if (!S) return noState()
     return {
       unit: S.unit || 'kg',
@@ -135,8 +135,8 @@ export const getRoutine = {
   name: 'get_routine',
   description: 'Get the full exercise list for a single routine (the same view the routine editor shows). Returns mode (reps/time/cardio), set/rep/weight targets (a `pyramid` list of per-set rep targets, \'max\' meaning as many reps as possible, when the exercise uses pyramid sets, with `pyramid_rest_sec` and `pyramid_weight` per set where planned, 0 meaning the exercise\'s rest or last time\'s weight), superset links, any per-exercise custom increment or Epley deload factor, and each exercise\'s own rest in seconds (absent means it inherits the global rest timer). Use routine_id from list_routines.',
   schema: { routine_id: z.string().min(1) },
-  handler: ({ routine_id }) => {
-    const S = getState()
+  handler: async ({ routine_id }) => {
+    const S = await getState()
     if (!S) return noState()
     const r = (S.routines || []).find(x => x.id === routine_id)
     if (!r) { const e = new Error(`no routine with id ${JSON.stringify(routine_id)}`); e.code = 'ENOENT'; throw e }
@@ -192,8 +192,8 @@ export const getWeekPlan = {
   name: 'get_week_plan',
   description: 'Show the user\'s training plan. `days` is the authoritative answer to "what is planned when": the next seven dates from today with the routines planned for each (a date can hold several — a combined day) and how each was decided: a coach-week session ("coach"), a session the user pinned to that date ("pinned"), a one-off routine override ("override"), a "rest" override ("rest_override"), the weekday plan ("weekday") or nothing ("rest"). `coach_week` is the current coach week when one is running (a week written by an external planner through the API, never by the app): its sessions are done IN ORDER on whatever days the user trains (no weekday attached), the first undone one is today\'s session, a session can be pinned to a date, and `waiting` means the week starts on `starts_on`. `weekdays` is the user\'s own weekly plan keyed by JS getDay() (Sunday=0 … Saturday=6, the Kuch state convention) — in a coach week it holds only the routines the user planned themselves, which ride along beside the coach-week session.',
   schema: {},
-  handler: () => {
-    const S = getState()
+  handler: async () => {
+    const S = await getState()
     if (!S) return noState()
     const today = new Date()
     const isoToday = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0')
@@ -264,8 +264,8 @@ export const listWorkouts = {
     to: isoDate().optional().describe('Inclusive end date YYYY-MM-DD. Defaults to today.'),
     limit: z.number().int().min(1).max(200).optional().describe('Max items to return. Defaults to 25.')
   },
-  handler: ({ from, to, limit }) => {
-    const S = getState()
+  handler: async ({ from, to, limit }) => {
+    const S = await getState()
     if (!S) return noState()
     const lim = Math.min(Math.max(limit || 25, 1), 200)
     // `to` is documented as defaulting to today, and had no default at all. A row dated in the
@@ -324,8 +324,8 @@ export const getWorkout = {
     date: isoDate().optional().describe('The workout date as YYYY-MM-DD. If two sessions share that date, the answer lists them instead and asks for a workout_id.'),
     workout_id: z.string().min(1).optional().describe('The id from list_workouts. Preferred: it names one session even on a day with two.')
   },
-  handler: ({ date, workout_id }) => {
-    const S = getState()
+  handler: async ({ date, workout_id }) => {
+    const S = await getState()
     if (!S) return noState()
     const workouts = S.workouts || []
     let w
@@ -383,8 +383,8 @@ export const getBodyweight = {
     from: isoDate().optional().describe('Inclusive start date YYYY-MM-DD.'),
     to: isoDate().optional().describe('Inclusive end date YYYY-MM-DD. Defaults to today.')
   },
-  handler: ({ from, to }) => {
-    const S = getState()
+  handler: async ({ from, to }) => {
+    const S = await getState()
     if (!S) return noState()
     const goal = S.targetW || null
     // Same documented default as list_workouts: a future-dated weigh-in is not "latest".
@@ -419,8 +419,8 @@ export const estimate1rm = {
     exercise_id: z.string().min(1).optional().describe('An exercise id from list_routines or get_workout entries. If omitted, returns a full PR table.'),
     formula: z.enum(['epley', 'brzycki', 'lombardi']).optional().describe(`Formula to use. Defaults to ${DEFAULT_FORMULA}.`)
   },
-  handler: ({ exercise_id, formula }) => {
-    const S = getState()
+  handler: async ({ exercise_id, formula }) => {
+    const S = await getState()
     if (!S) return noState()
     const f = formula || DEFAULT_FORMULA
     if (exercise_id) {
@@ -467,8 +467,8 @@ export const muscleBalance = {
   schema: {
     period: z.enum(['week', 'month', 'all']).describe('window: last 7 days, last 30 days, or all-time')
   },
-  handler: ({ period }) => {
-    const S = getState()
+  handler: async ({ period }) => {
+    const S = await getState()
     if (!S) return noState()
     // Whole local days, counting today: a week is the 7 dates ending today, a month the 30. The
     // cutoff used to be an instant 7 x 24h back, which for the workouts that carry no clock — an
@@ -549,8 +549,8 @@ export const previewSession = {
     routine_id: z.string().min(1).optional().describe('Routine to preview. Defaults to the routine scheduled for `date`.'),
     date: isoDate().optional().describe('Date the session would be started on, YYYY-MM-DD. Affects which routine is scheduled and any one-off day override. Defaults to today.')
   },
-  handler: ({ routine_id, date }) => {
-    const S = getState()
+  handler: async ({ routine_id, date }) => {
+    const S = await getState()
     if (!S) return noState()
     const now = new Date()
     const iso = date || (now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'))
