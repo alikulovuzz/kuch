@@ -34,6 +34,7 @@ import { createMediaStore, mediaLimits, mediaConfig, MediaError, HASH_RE } from 
 import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
+import { store, UNREADABLE } from './store/index.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
 
 const PORT = +(process.env.PORT || 3000);
@@ -114,58 +115,17 @@ const secretFile = path.join(DATA, 'secret');
 if (!fs.existsSync(secretFile)) fs.writeFileSync(secretFile, crypto.randomBytes(32).toString('hex'), { mode: 0o600 });
 const SECRET = fs.readFileSync(secretFile, 'utf8').trim();
 
-const dbFile = path.join(DATA, 'db.json');
-// Every account, passkey and invite. Only a missing file starts empty: an unreadable one (a write
-// cut short by a power loss, a damaged restore) used to boot with no users at all, and the first
-// save then replaced it — every profile locked out, every training history orphaned, and with
-// FIRST_USER_ADMIN the first visitor made admin. Now the damaged file is kept aside and the copy
-// saveDb keeps of each version it writes (db.json.bak) is used; with neither readable the server
-// refuses to start, saying why, rather than start as a new instance.
-function loadDb() {
-  let raw;
-  try { raw = fs.readFileSync(dbFile, 'utf8'); }
-  catch (e) { if (e.code === 'ENOENT') return { users: [], creds: [], subs: [], invites: [] }; throw e; }
-  const parse = text => { const v = JSON.parse(text); if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object'); return v; };
-  try { return parse(raw); } catch (err) {
-    const aside = `${dbFile}.unreadable-${Date.now()}`;
-    try { fs.copyFileSync(dbFile, aside); } catch { /* the original stays where it is anyway */ }
-    console.error(`db.json cannot be read (${err.message}); kept a copy as ${path.basename(aside)}`);
-    try {
-      const bak = parse(fs.readFileSync(dbFile + '.bak', 'utf8'));
-      console.error('db.json: using db.json.bak, the copy of the last save');
-      return bak;
-    } catch {
-      console.error('db.json: no readable db.json.bak either. Refusing to start: restore db.json from a backup.');
-      process.exit(1);
-    }
-  }
-}
-let db = loadDb();
-db.users = db.users || [];
-db.creds = db.creds || [];
-db.subs = db.subs || [];
-db.invites = db.invites || [];
-db.deviceLinks = db.deviceLinks || [];   // unused one-time device links, hashed (device-link.js)
+// Every account, passkey and invite (store/index.js), held here in memory and changed in place.
+let db = store.loadDb();
 const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
-// 0600: db.json holds passkey credential material. It used to be covered by a blanket 0700 on
-// the whole directory; now that the directory stays traversable, the file carries its own mode.
-// Once the new version is on disk, a second copy of it goes to db.json.bak, the same durable
-// way: loadDb falls back to it. A copy of the version being replaced, as it used to be, lost
-// whatever the last save wrote (a profile just created) when db.json was later found unreadable.
-// A write cut short leaves the previous db.json.bak whole (temporary file and rename).
-function saveDb() {
-  const text = JSON.stringify(db, null, 2);
-  atomicWrite(dbFile, text, 0o600);
-  try { atomicWrite(dbFile + '.bak', text, 0o600); }
-  catch (e) { console.error('db.json.bak could not be written', e.message); }
-}
+// Every route that changes `db` saves all of it.
+function saveDb() { store.saveDb(db); }
 // Flushed before and after the rename (durable.js): a host reset must not bring back the file
 // the client was told had been replaced.
 function atomicWrite(file, content, mode) { durableWrite(file, content, mode); }
 // How many earlier write ids a document keeps (`_wids`, see PUT /api/data): a device that last
 // synced more writes ago than this merges on its next pull instead of taking the server's copy.
 const WID_KEEP = 50;
-const stateFile = uid => path.join(DATA, 'state-' + uid.replace(/[^a-zA-Z0-9_-]/g, '') + '.json');
 // When a profile last fetched its document (GET /api/data). The document's own `_ts` moves only
 // on a push, so a device that only ever read — a second phone, a profile that trains elsewhere
 // and just looks — showed "last sync never" in the admin dashboard (QA 1.3.9). Kept on the user
@@ -178,19 +138,6 @@ function notePull(user, now = Date.now()) {
 }
 // The later of the last push and the last pull.
 const lastSyncOf = (u, S) => Math.max(S?._ts || 0, u?.lastPull || 0) || null;
-function readState(uid) {
-  try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
-}
-// GET and PUT /api/data tell a profile with no state yet from one whose file cannot be read: the
-// second answers 503 instead of an empty profile, which a device would adopt, or a write would
-// replace, losing what a restore could still bring back.
-const UNREADABLE = Symbol('unreadable');
-function readStateStrict(uid) {
-  let raw;
-  try { raw = fs.readFileSync(stateFile(uid), 'utf8'); }
-  catch (e) { return e.code === 'ENOENT' ? null : UNREADABLE; }
-  try { return JSON.parse(raw); } catch { return UNREADABLE; }
-}
 // A stored document as a client gets it: without the server's own notes `_unstamped` and `_prior`.
 function forClient(S) {
   if (!S || typeof S !== 'object' || !('_unstamped' in S || '_prior' in S)) return S;
@@ -448,38 +395,6 @@ const hhmmToMin = v => {
 // Minutes since the reminder's time on the user's clock; negative before it, NaN when either
 // side does not parse. Same-day only — a 23:55 reminder is not owed at 00:05 the next day.
 const minutesLate = (time, now) => hhmmToMin(now.hhmm) - hhmmToMin(time);
-// The tick reads every subscribed user's state file every 10 s. Most of those files do not
-// change between ticks; a stat is far cheaper than a read and a parse of a state that can be
-// megabytes, and it keeps the tick short — a slow tick was one more way to miss the minute.
-//
-// What it holds is a whole parsed state per user, and a state can be megabytes, so the two
-// bounds below are what keep it a cache rather than a leak on an instance with more than one
-// person on it: an entry nobody has touched for ten minutes is dropped, and the map never holds
-// more than STATE_CACHE_MAX users. Map iteration order is insertion order, so re-inserting on
-// every hit makes the first key the least recently hit one — which is the one to evict.
-const STATE_CACHE_MAX = 64;
-// Ten minutes: far longer than the gap between a client's polls (30 s) or the reminder tick's
-// (10 s), so nobody who is actually using the instance is ever evicted by age; the tests shorten
-// it, as they do REMINDER_TICK_MS.
-const STATE_CACHE_TTL_MS = Math.max(50, +(process.env.STATE_CACHE_TTL_MS || 600000) || 600000);
-const stateCache = new Map(); // uid -> { mtimeMs, size, hitAt, S }
-function readStateCached(uid) {
-  let st;
-  try { st = fs.statSync(stateFile(uid)); } catch { stateCache.delete(uid); return null; }
-  const now = Date.now();
-  for (const [k, v] of stateCache) if (now - v.hitAt > STATE_CACHE_TTL_MS) stateCache.delete(k);
-  const hit = stateCache.get(uid);
-  stateCache.delete(uid);                       // re-inserted below, so the map stays in hit order
-  if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) {
-    hit.hitAt = now;
-    stateCache.set(uid, hit);
-    return hit.S;
-  }
-  const S = readState(uid);
-  stateCache.set(uid, { mtimeMs: st.mtimeMs, size: st.size, hitAt: now, S });
-  while (stateCache.size > STATE_CACHE_MAX) stateCache.delete(stateCache.keys().next().value);
-  return S;
-}
 // Missed-workout nudge (nudge.js): opt-in on top of the reminder, so it needs everything the
 // reminder does (a push subscription, the reminder on, a zone). Owed from 20:00 — or 2 h after the
 // reminder — until 21:30 on the user's clock, the same catch-up idea as the reminder's window: a
@@ -504,7 +419,7 @@ setInterval(() => {
     // skipped, not allowed to take the process — and everyone else's reminders — down with it.
     // PUT /api/data refuses the obvious shapes, but a file already on disk answers to nobody.
     try {
-      const S = readStateCached(user.id);
+      const S = store.readStateCached(user.id);
       if (!S?.reminder?.on) continue;
       const now = userNow(S.reminder.tz || 'UTC');
       if (!now) continue;
@@ -1758,7 +1673,7 @@ const passkeyRoutes = {
 // either way: an admin deleting a profile must still remove files uploaded while it was on.
 const MEDIA_LIMITS = mediaLimits(process.env);
 const MEDIA_ON = MEDIA_LIMITS.enabled;
-const MEDIA = createMediaStore({ dir: path.join(DATA, 'uploads'), limits: MEDIA_LIMITS, readState });
+const MEDIA = createMediaStore({ dir: path.join(DATA, 'uploads'), limits: MEDIA_LIMITS, readState: store.readState });
 // Leftovers of uploads the previous process was receiving when it stopped.
 try { MEDIA.cleanTmp(); } catch (e) { console.error('media: boot cleanup failed', e.message); }
 // Per profile, not per address: every upload is signed in, and behind a proxy one address can be
@@ -2174,7 +2089,7 @@ const routes = {
   'GET /api/data': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    const state = readStateStrict(user.id);
+    const state = store.readStateStrict(user.id);
     if (state === UNREADABLE) { console.error('state file unreadable for', user.id); return json(res, 503, { error: 'state unreadable' }); }
     notePull(user);
     json(res, 200, { state: forClient(state), rev: state?._rev || 0 });
@@ -2184,11 +2099,11 @@ const routes = {
   // device is meant to show what the server has, and this is what keeps that cheap.
   // Cheap means the stat cache the reminder tick already uses: parsing a megabytes-long document
   // to read one number off it cost 31 ms per poll on a 2.4 MB state, all of it on the event loop.
-  // Every write goes through atomicWrite's rename, so the cache can never hand out a stale rev.
+  // Every write goes through store.writeState, which evicts the cache, so it never hands out a stale rev.
   'GET /api/data/rev': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    const doc = readStateCached(user.id);
+    const doc = store.readStateCached(user.id);
     json(res, 200, { rev: doc?._rev || 0, ...(doc?._wid ? { wid: doc._wid } : {}) });
   },
 
@@ -2225,9 +2140,9 @@ const routes = {
     // push would silently drop that write. The current document travels back with the 409, so
     // the client can merge and try again without a second request. No `baseRev` (a client from
     // before revisions, or a deliberate replace such as a backup import) overwrites, as before.
-    // readState and atomicWrite are synchronous with nothing awaited between them, so the
+    // readStateStrict and writeState are synchronous with nothing awaited between them, so the
     // compare-and-write is atomic for this process.
-    const cur = readStateStrict(user.id);
+    const cur = store.readStateStrict(user.id);
     if (cur === UNREADABLE) { console.error('state file unreadable for', user.id); return json(res, 503, { error: 'state unreadable' }); }
     const curRev = cur?._rev || 0;
     // `_rev` is a counter, so after the data directory went back in time (a restored backup, a
@@ -2273,14 +2188,7 @@ const routes = {
     let text;
     try { text = JSON.stringify(body.state); }
     catch (e) { if (e instanceof RangeError) return json(res, 400, { error: 'invalid state' }); throw e; }
-    atomicWrite(stateFile(user.id), text);
-    // The stat cache cannot see this write on its own: mtime granularity is 4 ms here (ext4 on
-    // this kernel — 3901 of 3999 back-to-back same-size writes shared one timestamp), and a
-    // `_rev` going from 7 to 8 does not change the file's size, so two writes inside one 4 ms
-    // tick are the same (mtimeMs, size) key. A reader that sampled between them would then serve
-    // the old revision until some later write happened to land on a different tick. This is the
-    // only writer of a state file in the tree, so evicting here is the whole fix.
-    stateCache.delete(user.id);
+    store.writeState(user.id, text);
     // Starts (or stops) the grace clock of every stored file this write stopped (or started)
     // referencing. Bookkeeping only: the state is already saved, so nothing here may turn a
     // successful write into an error.
@@ -2352,7 +2260,7 @@ const routes = {
   'POST /api/push/test': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
-    await sendPush(user.id, testPush(readStateCached(user.id)?.lang));
+    await sendPush(user.id, testPush(store.readStateCached(user.id)?.lang));
     json(res, 200, { ok: true });
   },
 
@@ -2367,7 +2275,7 @@ const routes = {
     const n = typeof raw === 'number' || typeof raw === 'string' ? Number(raw) : NaN;
     if (!(n >= 1)) return json(res, 400, { error: 'seconds required' });
     const sec = Math.min(3600, Math.round(n));
-    scheduleRestTimer(user.id, deviceIdOf(body.deviceId), sec, readStateCached(user.id)?.lang);
+    scheduleRestTimer(user.id, deviceIdOf(body.deviceId), sec, store.readStateCached(user.id)?.lang);
     json(res, 200, { ok: true });
   },
 
@@ -2408,7 +2316,7 @@ const routes = {
   'GET /api/admin/users': async (req, res) => {
     if (!requireAdmin(req, res)) return;
     const users = db.users.map(u => {
-      const S = readState(u.id) || {};
+      const S = store.readState(u.id) || {};
       const workouts = records(S.workouts);
       const last = workouts[workouts.length - 1];
       return {
@@ -2433,7 +2341,7 @@ const routes = {
     const id = new URL(req.url, 'http://x').searchParams.get('id');
     const u = db.users.find(x => x.id === id);
     if (!u) return json(res, 404, { error: 'no such user' });
-    const S = readState(u.id) || {};
+    const S = store.readState(u.id) || {};
     json(res, 200, {
       user: {
         id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), invitedBy: u.invitedBy || null,
@@ -2486,7 +2394,7 @@ const routes = {
     dropDeviceLinks(db, u.id);
     presence.delete(u.id);
     // The training history and any Coach credential of theirs, both outside db.json.
-    try { fs.unlinkSync(stateFile(u.id)); } catch { /* already gone */ }
+    store.deleteState(u.id);
     try { coachConfig.clearProfileAuth(u.id); } catch { /* nothing stored */ }
     // Their photos and videos — the one place a profile's folder under uploads/ is removed.
     try { MEDIA.removeUser(u.id); } catch (e) { console.error('media: could not remove uploads of', u.id, e.message); }
