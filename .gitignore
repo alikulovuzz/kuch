@@ -17,6 +17,18 @@ kuch-backup-*
 kuch-db-*
 *.dump
 
+# Android release signing: keystores and any local file holding their passwords. The key belongs
+# outside the repo (frontend/android/app/build.gradle reads ~/.gradle/gradle.properties or the
+# environment); these only stop a stray copy from being committed.
+*.keystore
+*.jks
+*.p12
+*.pfx
+keystore.properties
+signing.properties
+*.keystore.properties
+*.signing.properties
+
 # Build output / deps
 frontend/dist/
 node_modules/

@@ -1,5 +1,23 @@
 apply plugin: 'com.android.application'
 
+// Release signing comes from outside the repo: ~/.gradle/gradle.properties (or -P) first, then the
+// environment. Without all four values `assembleRelease` still succeeds and writes
+// app-release-unsigned.apk, to be signed by hand as in docs/MOBILE.md. Never put these values,
+// or the keystore, in this project: anything under frontend/android is committed.
+def releaseSigningKeys = ['RELEASE_STORE_FILE', 'RELEASE_STORE_PASSWORD', 'RELEASE_KEY_ALIAS', 'RELEASE_KEY_PASSWORD']
+def releaseSigning = releaseSigningKeys.collectEntries { key ->
+    def value = project.findProperty(key) ?: System.getenv(key)
+    [(key): value ? value.toString() : null]
+}
+def hasReleaseSigning = releaseSigning.values().every { it }
+if (!hasReleaseSigning && releaseSigning.values().any { it }) {
+    logger.warn("Release signing is half configured (missing: ${releaseSigning.findAll { !it.value }.keySet().join(', ')}); release builds will be unsigned.")
+}
+// gradle.properties does not expand "~", and a keystore path there usually starts with it
+def releaseStoreFile = { String path ->
+    file(path.startsWith('~/') ? "${System.getProperty('user.home')}${path.substring(1)}" : path)
+}
+
 android {
     namespace "io.github.alikulovuzz.kuch"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,8 +34,21 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile releaseStoreFile(releaseSigning.RELEASE_STORE_FILE)
+                storePassword releaseSigning.RELEASE_STORE_PASSWORD
+                keyAlias releaseSigning.RELEASE_KEY_ALIAS
+                keyPassword releaseSigning.RELEASE_KEY_PASSWORD
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             // The barcode scanner's ML Kit library ships a native build for four CPU families.

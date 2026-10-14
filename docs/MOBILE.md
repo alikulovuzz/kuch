@@ -294,6 +294,22 @@ zipalign -f -p 4 app-release-unsigned.apk aligned.apk
 apksigner sign --ks my.keystore --ks-key-alias kuch --out kuch.apk aligned.apk
 ```
 
+Or let Gradle sign it. Keep the keystore outside the repo (`*.keystore` and `*.jks` are
+gitignored anyway) and give `app/build.gradle` its four values in `~/.gradle/gradle.properties`
+or as environment variables of the same names:
+
+```properties
+RELEASE_STORE_FILE=~/keys/kuch.keystore
+RELEASE_STORE_PASSWORD=…
+RELEASE_KEY_ALIAS=kuch
+RELEASE_KEY_PASSWORD=…
+```
+
+`assembleRelease` then writes a signed `app/build/outputs/apk/release/app-release.apk`; check
+it with `apksigner verify --print-certs`. With any of the four missing it still builds, unsigned,
+as above (it warns when only some are set). Use forward slashes in the path, also on Windows:
+`gradle.properties` reads a backslash as an escape.
+
 ### iPhone — what's actually possible
 
 Apple does not allow installing apps outside the App Store, so there is no `.ipa` download
