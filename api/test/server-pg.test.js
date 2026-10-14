@@ -111,8 +111,24 @@ test('a document with a NUL character is a bad request, and nothing is stored', 
   const h = await startServer(t);
   const res = await h.put({ unit: 'kg', note: 'a\u0000b', workouts: [], routines: [] });
   assert.equal(res.status, 400);
-  assert.deepEqual(res.body, { error: 'invalid state' });
+  assert.match(res.body.error, /NUL character/);
   assert.equal((await h.req('GET', '/api/data/rev')).body.rev, 0);
+});
+
+// Anything that lands in memory is in every later save until it leaves, so a string Postgres
+// refuses (U+0000; a lone surrogate) must be turned away before a route changes `db`: let in, it
+// would fail every save on the instance, for everyone, until a restart.
+test('text Postgres cannot store is refused at the door, and saving keeps working', { skip: NO_PG }, async t => {
+  const h = await startServer(t);
+  const sub = await h.req('POST', '/api/push/subscribe', {
+    body: { subscription: { endpoint: 'https://push.example.com/send/abc', keys: { p256dh: 'p', auth: 'a\u0000' } } } });
+  assert.equal(sub.status, 400);
+  const note = await h.req('POST', '/api/admin/invites/new', { uid: ADMIN, body: { note: 'half \ud800 a pair' } });
+  assert.equal(note.status, 400);
+  // An escaped backslash before "u0000" is ordinary text.
+  const ok = await h.req('POST', '/api/admin/invites/new', { uid: ADMIN, body: { note: 'C:\\u0000 \ud83d\ude00' } });
+  assert.equal(ok.status, 200);
+  assert.deepEqual((await h.pg.query('SELECT note FROM invites')).rows, [{ note: 'C:\\u0000 \ud83d\ude00' }]);
 });
 
 test('health reports the database', { skip: NO_PG }, async t => {

@@ -30,6 +30,8 @@
    - listStateUids()        the uid of every profile that has a document.
    - health()               { ok } for a backend with a server to reach, null for one without.
    - close()                lets go of connections (tests; the API never closes its store).
+   - refuses(value)         whether `value` holds a string the backend cannot store (synchronous).
+                            Postgres refuses U+0000 and lone surrogates; files refuse nothing.
 
    Errors: StoreUnavailable means the database cannot be reached right now (the API answers 503).
 

@@ -688,12 +688,20 @@ function readBody(req) {
       if (over) return;
       if (!chunks.length) return resolve({});
       let body;
-      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      const raw = Buffer.concat(chunks).toString('utf8');
+      try { body = JSON.parse(raw); }
       catch { return reject(new HttpError(400, 'invalid json')); }
       // Every handler reads fields off the result, so a JSON `null`, string, number or array is
       // as much a client mistake as unparseable text — refused once here rather than dereferenced
       // (and turned into a TypeError) in each route.
       if (!body || typeof body !== 'object' || Array.isArray(body)) return reject(new HttpError(400, 'invalid json'));
+      // Text the store cannot hold (Postgres: U+0000, a lone surrogate) is refused here, before any
+      // route copies it into `db`: in memory it would be part of every later save, and every save
+      // on the instance would fail on it until a restart. Decoded UTF-8 never yields either, so
+      // only a \u escape can, and a body without one is not walked at all.
+      if (/\\u(0000|d[89a-f])/i.test(raw) && store.refuses(body)) {
+        return reject(new HttpError(400, 'text with a NUL character or half a surrogate pair cannot be stored'));
+      }
       resolve(body);
     });
     // A browser hanging up mid-body — which is what pagehide does to an in-flight sync — is not

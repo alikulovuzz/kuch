@@ -129,6 +129,22 @@ function transient(e) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Whether some string in `value`, a key or a value at any depth, is one Postgres refuses: U+0000
+// (TEXT and JSONB both) or a lone surrogate (JSONB). Iterative, so a document nested thousands
+// deep is walked rather than overflowing the stack.
+export function refuses(value) {
+  const bad = s => s.includes('\u0000') || !s.isWellFormed();
+  const stack = [value];
+  while (stack.length) {
+    const v = stack.pop();
+    if (typeof v === 'string') { if (bad(v)) return true; }
+    else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) { if (bad(k)) return true; stack.push(x); }
+    }
+  }
+  return false;
+}
+
 // The bounds of readStateCached, the file backend's (store/file.js has the reasoning).
 const STATE_CACHE_MAX = 64;
 const STATE_CACHE_TTL_MS = Math.max(50, +(process.env.STATE_CACHE_TTL_MS || 600000) || 600000);
@@ -378,5 +394,5 @@ export function createPgStore({
     if (lockClient) await lockClient.end().catch(() => {});
   }
 
-  return { loadDb, saveDb, readState, readStateStrict, readStateCached, readStateRev, casWriteState, deleteState, listStateUids, health, close };
+  return { loadDb, saveDb, readState, readStateStrict, readStateCached, readStateRev, casWriteState, deleteState, listStateUids, health, close, refuses };
 }

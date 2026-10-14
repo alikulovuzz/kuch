@@ -163,6 +163,8 @@ export function createFileStore({ dir }) {
   // Nothing to report beyond the data directory, which GET /api/health already probes.
   async function health() { return null; }
   async function close() {}
+  // JSON holds any string, so nothing is refused.
+  const refuses = () => false;
 
-  return { loadDb, saveDb, readState, readStateStrict, readStateCached, readStateRev, casWriteState, deleteState, listStateUids, health, close };
+  return { loadDb, saveDb, readState, readStateStrict, readStateCached, readStateRev, casWriteState, deleteState, listStateUids, health, close, refuses };
 }
