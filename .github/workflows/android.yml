@@ -1,0 +1,133 @@
+# Builds the Android APK (docs/MOBILE.md): the VITE_MOBILE bundle, `cap sync`, `gradlew assembleRelease`.
+#
+# Signed on a push to main, on a `v*` tag and on a manual run, with the release keystore from the
+# repository secrets; app/build.gradle signs whenever the four RELEASE_* values are set. Pull
+# requests always build unsigned, and so do forks, which do not have the secrets. An unsigned APK
+# cannot be installed; it only proves the build.
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   RELEASE_KEYSTORE_B64     the keystore, base64 (`base64 -w0 ~/keys/kuch.keystore`)
+#   RELEASE_STORE_PASSWORD   its password
+#   RELEASE_KEY_ALIAS        kuch
+#   RELEASE_KEY_PASSWORD     the key's password (the same as the store's unless you chose otherwise)
+#
+# KEEP THAT KEYSTORE: updates must be signed with the same key or Android refuses to install
+# them over an existing copy.
+name: Android APK
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'catalogue/media/**'
+      - 'scripts/catalogue/stage-media.mjs'
+      - '.github/workflows/android.yml'
+  push:
+    branches: [main]
+    # Path filters do not apply to tag pushes, so every v* tag builds.
+    tags: ['v*']
+    paths:
+      - 'frontend/**'
+      - 'catalogue/media/**'
+      - 'scripts/catalogue/stage-media.mjs'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      SIGN: ${{ github.event_name != 'pull_request' }}
+      # A release tag here must never quietly ship an APK nobody can install. Forks are exempt.
+      REQUIRE_KEY: ${{ github.repository == 'alikulovuzz/kuch' && startsWith(github.ref, 'refs/tags/') }}
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
+    steps:
+      - uses: actions/checkout@v7
+
+      # node:22-alpine in web/Dockerfile and api/Dockerfile, as in test.yml.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # AGP 8.7 runs on JDK 17+; 21 is what the dev machines build with. The runner image ships
+      # the Android SDK (ANDROID_HOME), and AGP fetches a missing platform itself.
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - run: npm ci
+        working-directory: frontend
+
+      # VITE_MOBILE build + stage the 180 px exercise media + `cap sync` + the bundle check.
+      - run: npm run build:mobile
+        working-directory: frontend
+
+      - name: Release keystore
+        if: env.SIGN == 'true'
+        env:
+          RELEASE_KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_B64" ] || [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$RELEASE_KEY_ALIAS" ] || [ -z "$RELEASE_KEY_PASSWORD" ]; then
+            if [ "$REQUIRE_KEY" = true ]; then
+              echo "::error::$GITHUB_REF_NAME is a release tag but the RELEASE_* secrets are not all set."
+              exit 1
+            fi
+            echo "No signing secrets on this repository: building an UNSIGNED apk (cannot be installed)."
+            exit 0
+          fi
+          # Outside the checkout, so nothing can pick it up as a build input or an artifact.
+          printf '%s' "$RELEASE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          {
+            echo "RELEASE_STORE_FILE=$RUNNER_TEMP/release.keystore"
+            echo "RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD"
+            echo "RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS"
+            echo "RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - run: ./gradlew assembleRelease
+        working-directory: frontend/android
+
+      - name: Name, verify and checksum the apk
+        run: |
+          set -eu
+          VER="$(node -p "require('./frontend/package.json').version")"
+          OUT=frontend/android/app/build/outputs/apk/release
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          mkdir dist-apk
+          if [ -f "$OUT/app-release.apk" ]; then
+            APK="dist-apk/kuch-$VER.apk"
+            cp "$OUT/app-release.apk" "$APK"
+            "$BT/apksigner" verify --print-certs "$APK"
+          else
+            APK="dist-apk/kuch-$VER-unsigned.apk"
+            cp "$OUT/app-release-unsigned.apk" "$APK"
+          fi
+          # Sideloading means no app store checked this file, so the digest goes next to it.
+          (cd dist-apk && sha256sum "$(basename "$APK")" > "$(basename "$APK").sha256" && cat ./*.sha256)
+          echo "APK_NAME=$(basename "$APK" .apk)" >> "$GITHUB_ENV"
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APK_NAME }}
+          path: dist-apk/
+          if-no-files-found: error
+          retention-days: 30
