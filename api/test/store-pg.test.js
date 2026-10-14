@@ -62,6 +62,29 @@ test('what saveDb stores, loadDb gives back exactly, in another process', { skip
   assert.deepEqual(await b.loadDb(), richDb());
 });
 
+// JSONB stores object keys in an order of its own: the same value with its keys in another order
+// (from db.json, or rebuilt by a route) is no change.
+test('a value whose keys only come in another order is not written again', { skip: NO_PG }, async t => {
+  const pg = await freshSchema(t);
+  const store = await open(t, pg.url);
+  const db = await store.loadDb();
+  Object.assign(db, richDb());
+  await store.saveDb(db);
+  const versions = async () => (await pg.query(`SELECT endpoint AS k, xmin::text AS x FROM push_subscriptions
+    UNION ALL SELECT id, xmin::text FROM users UNION ALL SELECT key, xmin::text FROM db_extra ORDER BY 1`)).rows;
+  const before = await versions();
+
+  const reversed = o => Object.fromEntries(Object.entries(o).reverse());
+  for (const s of db.subs) s.keys = reversed(s.keys);                       // a json column
+  const zed = db.users.find(u => u.id === 'u_z');
+  zed.pwReset = reversed(zed.pwReset);
+  const ann = db.users.find(u => u.id === 'u_a');
+  db.users[db.users.indexOf(ann)] = reversed(ann);                          // its extra
+  db.settings = reversed(db.settings);                                      // db_extra
+  await store.saveDb(db);
+  assert.deepEqual(await versions(), before);
+});
+
 test('a save writes only the rows that changed, and removes what is gone with what it owned', { skip: NO_PG }, async t => {
   const pg = await freshSchema(t);
   const store = await open(t, pg.url);

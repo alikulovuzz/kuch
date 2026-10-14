@@ -23,7 +23,7 @@ const MIGRATIONS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..',
 
 // BIGINT columns hold epoch milliseconds and counters, all safe integers: read them as numbers,
 // as db.json had them, not as the strings node-postgres gives by default.
-const types = { getTypeParser: (oid, format) => (oid === 20 ? Number : pg.types.getTypeParser(oid, format)) };
+export const types = { getTypeParser: (oid, format) => (oid === 20 ? Number : pg.types.getTypeParser(oid, format)) };
 
 /* Every db.json collection and its table, parents before children (the order rows are written
    in; deletes go the other way). Each column is [column, field, kind]; the first is the key. */
@@ -73,6 +73,14 @@ function fits(kind, v) {
   }
 }
 
+// JSON text with the keys of every object sorted. JSONB keeps keys in an order of its own, so a
+// value read back serialises like the same value from memory (or from db.json) only this way, and
+// a row whose content did not change is not written again.
+function canonical(v) {
+  return JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x)
+    ? Object.fromEntries(Object.keys(x).sort().map(key => [key, x[key]])) : x));
+}
+
 // A record at `pos` in its collection → the upsert's parameters: pos, every column, extra. A
 // field that is absent (or undefined, which JSON drops too) is NULL; one that does not fit its
 // column (an explicit null, a wrong type) goes to `extra` with every field that has no column.
@@ -82,18 +90,18 @@ function encode(spec, rec, pos) {
   const stored = new Set();
   for (const [, field, kind] of spec.cols) {
     const v = rec[field];
-    if (v !== undefined && fits(kind, v)) { params.push(kind === 'json' ? JSON.stringify(v) : v); stored.add(field); }
+    if (v !== undefined && fits(kind, v)) { params.push(kind === 'json' ? canonical(v) : v); stored.add(field); }
     else params.push(null);
   }
   const extra = {};
   for (const [k, v] of Object.entries(rec)) if (v !== undefined && !stored.has(k)) extra[k] = v;
-  params.push(JSON.stringify(extra));
+  params.push(canonical(extra));
   if (params[1] === null) throw new Error(`db.${spec.coll}[${pos}] has no ${spec.cols[0][1]}`);
   return params;
 }
 
 // The whole `db` as rows: table → key → { params, sig }, sig being what the diff compares.
-function encodeAll(db) {
+export function encodeAll(db) {
   const all = new Map();
   for (const spec of TABLES) {
     const rows = new Map();
@@ -109,7 +117,7 @@ function encodeAll(db) {
   const extra = new Map();
   for (const [key, value] of Object.entries(db)) {
     if (COLLECTIONS.has(key) || value === undefined) continue;
-    const json = JSON.stringify(value);
+    const json = canonical(value);
     extra.set(key, { params: [key, json], sig: json });
   }
   all.set('db_extra', extra);
@@ -117,6 +125,65 @@ function encodeAll(db) {
 }
 const EXTRA_UPSERT = 'INSERT INTO db_extra (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value';
 const EXTRA_REMOVE = 'DELETE FROM db_extra WHERE key = ANY($1::text[])';
+
+// Every table read back into the `db` object loadDb gives, on `client` inside the caller's
+// transaction.
+export async function readAccounts(client) {
+  const db = {};
+  for (const spec of TABLES) {
+    const { rows } = await client.query(`SELECT * FROM ${spec.table} ORDER BY pos`);
+    db[spec.coll] = rows.map(row => decode(spec, row));
+  }
+  for (const { key, value } of (await client.query('SELECT key, value FROM db_extra ORDER BY key')).rows) {
+    if (!COLLECTIONS.has(key)) db[key] = value;
+  }
+  return db;
+}
+
+// The statements that take the tables from `prev` to `next` (both as encodeAll has them): deletes
+// children first, then upserts parents first, so no foreign key is ever left dangling inside the
+// transaction. Each is { kind: insert|update|delete, table, key, sql, params }.
+export function diffRows(prev, next) {
+  const ops = [];
+  const gone = (table, sql) => {
+    const keys = [...prev.get(table).keys()].filter(k => !next.get(table).has(k));
+    if (keys.length) ops.push({ kind: 'delete', table, key: keys.join(', '), sql, params: [keys] });
+  };
+  const changed = (table, sql) => {
+    for (const [key, row] of next.get(table)) {
+      const was = prev.get(table).get(key);
+      if (was?.sig !== row.sig) ops.push({ kind: was ? 'update' : 'insert', table, key, sql, params: row.params });
+    }
+  };
+  for (const spec of [...TABLES].reverse()) gone(spec.table, spec.remove);
+  gone('db_extra', EXTRA_REMOVE);
+  for (const spec of TABLES) {
+    // Unique values are checked row by row, so an address handed from one profile to another
+    // in the same save would clash with its old row if that row is written second: clear the
+    // unique columns of every stored row whose value moves first. Only a real duplicate in
+    // memory is then refused.
+    for (const col of spec.unique || []) {
+      const i = 1 + spec.cols.findIndex(c => c[0] === col);
+      const was = prev.get(spec.table);
+      const moving = [...next.get(spec.table)].filter(([key, row]) => was.has(key) && was.get(key).params[i] !== row.params[i]).map(([key]) => key);
+      if (moving.length) ops.push({ kind: 'update', table: spec.table, key: moving.join(', '), sql: `UPDATE ${spec.table} SET ${col} = NULL WHERE ${spec.cols[0][0]} = ANY($1::text[])`, params: [moving] });
+    }
+    changed(spec.table, spec.upsert);
+  }
+  changed('db_extra', EXTRA_UPSERT);
+  return ops;
+}
+
+// user_state's rev, wid, wids and doc, taken from the document `d` in the statement that writes
+// it, so they always mirror it: rev is 0 unless _rev is a plain integer, wid only a string _wid,
+// wids [] unless _wids is an array.
+export const STATE_COLUMNS = `CASE WHEN jsonb_typeof(d->'_rev') = 'number' AND d->>'_rev' ~ '^[0-9]{1,15}$' THEN (d->>'_rev')::bigint ELSE 0 END,
+      CASE WHEN jsonb_typeof(d->'_wid') = 'string' THEN d->>'_wid' END,
+      CASE WHEN jsonb_typeof(d->'_wids') = 'array' THEN d->'_wids' ELSE '[]'::jsonb END, d`;
+
+// The advisory lock an API process holds on its schema for as long as it runs (see the header).
+// Anything that must not run beside an API on the same database takes it too.
+export const LOCK_KEY = "hashtext('kuch-api:' || coalesce(current_schema(), ''))";
 
 // Errors from a connection that is gone, refused or not accepting yet: worth waiting out at
 // startup, and a 503 rather than a 500 afterwards. A SQLSTATE means the server answered; only
@@ -183,7 +250,7 @@ export function createPgStore({
       onLockLost(e);
     });
     const { rows: [lock] } = await lockClient.query(
-      "SELECT pg_try_advisory_lock(hashtext('kuch-api:' || coalesce(current_schema(), ''))) AS ok, current_schema() AS schema");
+      `SELECT pg_try_advisory_lock(${LOCK_KEY}) AS ok, current_schema() AS schema`);
     if (!lock.ok) throw new Error(`another kuch-api owns this database (schema ${lock.schema}): run one API process per database`);
     const applied = await migrate(lockClient, MIGRATIONS);
     if (applied.length) console.log('database: applied migrations', applied.join(', '));
@@ -203,14 +270,7 @@ export function createPgStore({
     try {
       // One consistent view of every table.
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const db = {};
-      for (const spec of TABLES) {
-        const { rows } = await client.query(`SELECT * FROM ${spec.table} ORDER BY pos`);
-        db[spec.coll] = rows.map(row => decode(spec, row));
-      }
-      for (const { key, value } of (await client.query('SELECT key, value FROM db_extra ORDER BY key')).rows) {
-        if (!COLLECTIONS.has(key)) db[key] = value;
-      }
+      const db = await readAccounts(client);
       await client.query('COMMIT');
       snapshot = encodeAll(db);
       return db;
@@ -222,39 +282,8 @@ export function createPgStore({
 
   // What the last commit left in the tables, as encodeAll has it: the base every save diffs against.
   let snapshot = null;
-  // The statements that take the tables from `snapshot` to `next`: deletes children first, then
-  // upserts parents first, so no foreign key is ever left dangling inside the transaction.
-  function diff(next) {
-    const ops = [];
-    const gone = (table, sql) => {
-      const keys = [...snapshot.get(table).keys()].filter(k => !next.get(table).has(k));
-      if (keys.length) ops.push({ table, key: keys.join(', '), sql, params: [keys] });
-    };
-    const changed = (table, sql) => {
-      for (const [key, row] of next.get(table)) {
-        if (snapshot.get(table).get(key)?.sig !== row.sig) ops.push({ table, key, sql, params: row.params });
-      }
-    };
-    for (const spec of [...TABLES].reverse()) gone(spec.table, spec.remove);
-    gone('db_extra', EXTRA_REMOVE);
-    for (const spec of TABLES) {
-      // Unique values are checked row by row, so an address handed from one profile to another
-      // in the same save would clash with its old row if that row is written second: clear the
-      // unique columns of every stored row whose value moves first. Only a real duplicate in
-      // memory is then refused.
-      for (const col of spec.unique || []) {
-        const i = 1 + spec.cols.findIndex(c => c[0] === col);
-        const prev = snapshot.get(spec.table);
-        const moving = [...next.get(spec.table)].filter(([key, row]) => prev.has(key) && prev.get(key).params[i] !== row.params[i]).map(([key]) => key);
-        if (moving.length) ops.push({ table: spec.table, key: moving.join(', '), sql: `UPDATE ${spec.table} SET ${col} = NULL WHERE ${spec.cols[0][0]} = ANY($1::text[])`, params: [moving] });
-      }
-      changed(spec.table, spec.upsert);
-    }
-    changed('db_extra', EXTRA_UPSERT);
-    return ops;
-  }
   async function write(next) {
-    const ops = diff(next);
+    const ops = diffRows(snapshot, next);
     if (!ops.length) return;
     const client = await pool.connect().catch(e => { throw new StoreUnavailable(e); });
     let op = null;
@@ -348,9 +377,7 @@ export function createPgStore({
   async function casWriteState(uid, expectedRev, expectedWid, doc) {
     const text = JSON.stringify(doc);
     await ready();
-    const cols = `CASE WHEN jsonb_typeof(d->'_rev') = 'number' AND d->>'_rev' ~ '^[0-9]{1,15}$' THEN (d->>'_rev')::bigint ELSE 0 END,
-      CASE WHEN jsonb_typeof(d->'_wid') = 'string' THEN d->>'_wid' END,
-      CASE WHEN jsonb_typeof(d->'_wids') = 'array' THEN d->'_wids' ELSE '[]'::jsonb END, d`;
+    const cols = STATE_COLUMNS;
     let res;
     try {
       res = expectedRev == null
