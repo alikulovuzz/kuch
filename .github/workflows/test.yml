@@ -68,6 +68,24 @@ jobs:
 
   mcp:
     runs-on: ubuntu-latest
+    # The Postgres reader's tests (mcp/test/state-pg.test.js) make their own schemas in this
+    # job's throwaway database, as the api's do; without it they skip.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: kuch
+          POSTGRES_PASSWORD: kuch
+          POSTGRES_DB: kuch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kuch -d kuch_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL_TEST: postgres://kuch:kuch@localhost:5432/kuch_test
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
