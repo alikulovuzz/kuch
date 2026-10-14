@@ -89,7 +89,7 @@ async function runReview(provider, key, uid) {
   r = await call('POST /api/admin/coach/config', { model: r.body.models[0] });
   assert.equal(r.status, 200);
   writeState(DIR, uid, sampleState());
-  jobs.enqueue(uid, { kind: 'review' });
+  await jobs.enqueue(uid, { kind: 'review' });
   await settle(uid);
   return jobs.readUser(uid);
 }
@@ -112,7 +112,7 @@ test('Anthropic: the pasted key travels as x-api-key, the rules are the cached s
   assert.equal(rec.pending.changes[0].type, 'sets');
   // Every profile may use an API key: a second profile is not refused.
   writeState(DIR, 'u-anthropic-2', sampleState());
-  assert.doesNotThrow(() => jobs.enqueue('u-anthropic-2', { kind: 'review' }));
+  await assert.doesNotReject(jobs.enqueue('u-anthropic-2', { kind: 'review' }));
   await settle('u-anthropic-2');
   assert.equal(jobs.readUser('u-anthropic-2').history.at(-1).outcome, 'ready');
 });

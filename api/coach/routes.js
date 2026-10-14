@@ -73,7 +73,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
         // The admin's configured length is the real limit; jobs.enqueue is where it is actually
         // enforced (it is the one place that already loads config for every job). This slice is
         // only a sanity ceiling so an oversized string is not carried further than it has to be.
-        const job = jobs.enqueue(user.id, {
+        const job = await jobs.enqueue(user.id, {
           kind: 'create',
           intake: body.intake || null,
           lang: body.lang,
@@ -87,7 +87,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
       const user = guard(req, res); if (!user) return;
       const body = await readBody(req);
       try {
-        const job = jobs.enqueue(user.id, {
+        const job = await jobs.enqueue(user.id, {
           kind: 'review',
           lang: body.lang,
           note: body.note ? String(body.note).slice(0, cfgStore.MAX_MESSAGE_LEN_CEILING) : null
@@ -101,7 +101,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
       const user = guard(req, res); if (!user) return;
       const body = await readBody(req);
       try {
-        const job = jobs.enqueue(user.id, { kind: 'debrief', lang: body.lang, workoutId: body.workoutId ? String(body.workoutId).slice(0, 40) : null });
+        const job = await jobs.enqueue(user.id, { kind: 'debrief', lang: body.lang, workoutId: body.workoutId ? String(body.workoutId).slice(0, 40) : null });
         json(res, 202, { job });
       } catch (e) { failEnqueue(res, e); }
     },
@@ -111,7 +111,7 @@ export function coachRoutes({ json, readBody, readSession, requireAdmin }) {
     'GET /api/coach/cohort': async (req, res) => {
       const user = guard(req, res); if (!user) return;
       if (!cfgStore.load().community) return json(res, 200, { ok: false, enabled: false });
-      json(res, 200, computeCohort(user.id));
+      json(res, 200, await computeCohort(user.id));
     },
     'POST /api/coach/cohort/share': async (req, res) => {
       const user = guard(req, res); if (!user) return;

@@ -39,7 +39,7 @@ test('forgetting a profile does not hand it a fresh daily cap', async () => {
   writeState(DIR, uid, sampleState());
   cfg.save({ caps: { perProfileDaily: 1, instanceDaily: 0 } });
   try {
-    jobs.enqueue(uid, { kind: 'review' });
+    await jobs.enqueue(uid, { kind: 'review' });
     await settle(uid);
     assert.equal(jobs.capState(uid).used, 1);
 
@@ -48,7 +48,7 @@ test('forgetting a profile does not hand it a fresh daily cap', async () => {
     assert.equal(s.pending, null, 'the proposal is gone');
     assert.deepEqual(jobs.readUser(uid).history, [], 'the history is gone');
     assert.equal(s.cap.used, 1, 'the day\'s count is a spending record, not the profile\'s data');
-    assert.throws(() => jobs.enqueue(uid, { kind: 'review' }), e => e.code === 'cap');
+    await assert.rejects(jobs.enqueue(uid, { kind: 'review' }), e => e.code === 'cap');
   } finally {
     cfg.save({ caps: { perProfileDaily: 10, instanceDaily: 0 } });
   }
@@ -74,9 +74,9 @@ test('the instance cap is reserved at enqueue, so a job still running already co
   try {
     writeState(DIR, 'u-inst-1', sampleState());
     writeState(DIR, 'u-inst-2', sampleState());
-    jobs.enqueue('u-inst-1', { kind: 'review' });
+    await jobs.enqueue('u-inst-1', { kind: 'review' });
     assert.ok(jobs.status('u-inst-1').job, 'the first job is on its way');
-    assert.throws(() => jobs.enqueue('u-inst-2', { kind: 'review' }), e => e.code === 'cap',
+    await assert.rejects(jobs.enqueue('u-inst-2', { kind: 'review' }), e => e.code === 'cap',
       'the second profile is refused before the first job has finished');
     await settle('u-inst-1');
     assert.equal(lastOutcome('u-inst-1').outcome, 'ready');
@@ -86,16 +86,16 @@ test('the instance cap is reserved at enqueue, so a job still running already co
   }
 });
 
-test('the instance count is not bounded by the length of the job log', () => {
+test('the instance count is not bounded by the length of the job log', async () => {
   const uid = 'u-inst-150';
   writeState(DIR, uid, sampleState());
   cfg.save({ caps: { perProfileDaily: 10, instanceDaily: 150 }, daily: { date: today, count: 150 }, log: [] });
   try {
-    assert.throws(() => jobs.enqueue(uid, { kind: 'review' }), e => e.code === 'cap',
+    await assert.rejects(jobs.enqueue(uid, { kind: 'review' }), e => e.code === 'cap',
       'a hundred and fifty jobs today trip a cap of a hundred and fifty, empty log or not');
     // Yesterday's count is nobody's business today.
     cfg.save({ daily: { date: '2000-01-01', count: 150 } });
-    assert.doesNotThrow(() => jobs.enqueue(uid, { kind: 'review' }));
+    await assert.doesNotReject(jobs.enqueue(uid, { kind: 'review' }));
     assert.deepEqual(cfg.load().daily, { date: today, count: 1 });
   } finally {
     cfg.save({ caps: { perProfileDaily: 10, instanceDaily: 0 } });

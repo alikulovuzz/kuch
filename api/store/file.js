@@ -5,9 +5,14 @@
      boot (loadDb); the caller then owns the object in memory and hands it back whole to saveDb.
    - state-<uid>.json: one profile's training document, read from disk on every access.
 
-   Every call is synchronous. PUT /api/data's compare-and-write and the checks the auth routes
-   make right before a push rely on that: nothing yields between a read and the write after it. */
+   Every method is async, like every backend's (store/index.js). Under that, readState and
+   readStateStrict really read in the background (fs.promises): a state can be megabytes. The rest
+   do their work synchronously inside the call: saveDb serialises and writes `db` in the turn it
+   is called, so saves land in the order they were asked for; and readStateCached and writeState
+   share the stat cache, which a read still in flight across a write would refill with the old
+   document. */
 import fs from 'node:fs';
+import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { atomicWrite } from '../durable.js';
 
@@ -61,7 +66,7 @@ export function createFileStore({ dir }) {
   }
   // Every collection is there as an array, whatever an older db.json left out. Every other key and
   // field round-trips untouched through saveDb.
-  function loadDb() {
+  async function loadDb() {
     const db = readDb();
     db.users = db.users || [];
     db.creds = db.creds || [];
@@ -77,7 +82,7 @@ export function createFileStore({ dir }) {
   // whatever the last save wrote (a profile just created) when db.json was later found unreadable.
   // A write cut short leaves the previous db.json.bak whole (temporary file and rename).
   // A failure to write db.json throws to the caller; one to write the .bak is only logged.
-  function saveDb(db) {
+  async function saveDb(db) {
     const text = JSON.stringify(db, null, 2);
     atomicWrite(dbFile, text, 0o600);
     try { atomicWrite(dbFile + '.bak', text, 0o600); }
@@ -85,22 +90,26 @@ export function createFileStore({ dir }) {
   }
 
   // Lenient: a state that is missing or cannot be read is null.
-  function readState(uid) {
+  async function readState(uid) {
+    try { return JSON.parse(await fsp.readFile(stateFile(uid), 'utf8')); } catch { return null; }
+  }
+  // The same, synchronous: the stat cache's own read (see the header).
+  function readStateNow(uid) {
     try { return JSON.parse(fs.readFileSync(stateFile(uid), 'utf8')); } catch { return null; }
   }
   // GET and PUT /api/data tell a profile with no state yet from one whose file cannot be read: the
   // second answers 503 instead of an empty profile, which a device would adopt, or a write would
   // replace, losing what a restore could still bring back.
-  function readStateStrict(uid) {
+  async function readStateStrict(uid) {
     let raw;
-    try { raw = fs.readFileSync(stateFile(uid), 'utf8'); }
+    try { raw = await fsp.readFile(stateFile(uid), 'utf8'); }
     catch (e) { return e.code === 'ENOENT' ? null : UNREADABLE; }
     try { return JSON.parse(raw); } catch { return UNREADABLE; }
   }
   // readState through the stat cache above. The document it returns is shared with later readers:
   // never mutate it.
   const stateCache = new Map(); // uid -> { mtimeMs, size, hitAt, S }
-  function readStateCached(uid) {
+  async function readStateCached(uid) {
     let st;
     try { st = fs.statSync(stateFile(uid)); } catch { stateCache.delete(uid); return null; }
     const now = Date.now();
@@ -112,14 +121,14 @@ export function createFileStore({ dir }) {
       stateCache.set(uid, hit);
       return hit.S;
     }
-    const S = readState(uid);
+    const S = readStateNow(uid);
     stateCache.set(uid, { mtimeMs: st.mtimeMs, size: st.size, hitAt: now, S });
     while (stateCache.size > STATE_CACHE_MAX) stateCache.delete(stateCache.keys().next().value);
     return S;
   }
   // `text` is the whole document, already serialised. Throws if it could not be written, and then
   // nothing changed on disk (the rename is atomic).
-  function writeState(uid, text) {
+  async function writeState(uid, text) {
     atomicWrite(stateFile(uid), text);
     // The stat cache cannot see this write on its own: mtime granularity is 4 ms here (ext4 on
     // this kernel — 3901 of 3999 back-to-back same-size writes shared one timestamp), and a
@@ -130,11 +139,11 @@ export function createFileStore({ dir }) {
     stateCache.delete(uid);
   }
   // Never throws: a state that is already gone is what was asked for.
-  function deleteState(uid) {
+  async function deleteState(uid) {
     try { fs.unlinkSync(stateFile(uid)); } catch { /* already gone */ }
   }
   // Every profile with a state file — the population a Coach cohort is drawn from.
-  function listStateUids() {
+  async function listStateUids() {
     try {
       return fs.readdirSync(dir).filter(f => /^state-[a-zA-Z0-9_-]+\.json$/.test(f)).map(f => f.slice(6, -5));
     } catch { return []; }

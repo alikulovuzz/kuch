@@ -102,11 +102,11 @@ const hhmmToMin = v => {
  * @param {object} deps  { users(): [{id}], userNow(tz): {date,hhmm,weekday} }
  */
 export function startCadence(deps) {
-  const timer = setInterval(() => {
+  async function pass() {
     if (!cfgStore.isEnabled() || !cfgStore.isConnected()) return;
     for (const user of deps.users()) {
       try {
-        const S = jobs.readState(user.id);
+        const S = await jobs.readState(user.id);
         const coach = S?.coach;
         if (!coach?.consent?.agreedAt) continue;         // consent revoked ⇒ cadence stops
         // A job still running, or a proposal nobody has answered, is not a reason for another:
@@ -124,13 +124,19 @@ export function startCadence(deps) {
         const tz = coach.cadence?.weekly ? (S.reminder?.tz || 'UTC') : null;
         const now = tz ? deps.userNow(tz) : null;
         if (!isDue(coach, S, now, reviewedAt, tz)) continue;
-        jobs.enqueue(user.id, { kind: 'review', trigger: 'scheduled' });
+        await jobs.enqueue(user.id, { kind: 'review', trigger: 'scheduled' });
         console.log('coach: scheduled review queued for', user.id);
       } catch (e) {
         // Caps, an in-flight job, a provider that just went down: all ordinary, all silent.
         if (!(e instanceof jobs.CoachError)) console.error('coach cadence', user.id, e);
       }
     }
+  }
+  // One pass at a time: a pass that outlasts the tick (a slow store) is not joined by another.
+  let running = null;
+  const timer = setInterval(() => {
+    if (running) return;
+    running = pass().finally(() => { running = null; });
   }, TICK_MS);
   timer.unref();
   return timer;
