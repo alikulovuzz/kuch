@@ -82,6 +82,11 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
+          # A secret piped in from Windows (`... | gh secret set`) arrives with a CRLF on the end:
+          # base64 -d refuses the CR, and gradle would take it as part of the password.
+          for v in RELEASE_KEYSTORE_B64 RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
+            export "$v=$(printf '%s' "${!v}" | tr -d '\r\n')"
+          done
           if [ -z "$RELEASE_KEYSTORE_B64" ] || [ -z "$RELEASE_STORE_PASSWORD" ] || [ -z "$RELEASE_KEY_ALIAS" ] || [ -z "$RELEASE_KEY_PASSWORD" ]; then
             if [ "$REQUIRE_KEY" = true ]; then
               echo "::error::$GITHUB_REF_NAME is a release tag but the RELEASE_* secrets are not all set."
