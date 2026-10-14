@@ -12,6 +12,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { hashPassword } from '../password.js';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -78,20 +79,19 @@ before(async () => { pwHash ??= await hashPassword(GOOD); });
 
 async function startServer(t, { env = {}, users = [], creds = [], deviceLinks } = {}) {
   pwHash ??= await hashPassword(GOOD);
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-fa-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users, creds, subs: [], invites: [], ...(deviceLinks ? { deviceLinks } : {}) }));
+  const home = await dataHome({ t, prefix: 'gym-fa-', secret: SECRET, db: { users, creds, subs: [], invites: [], ...(deviceLinks ? { deviceLinks } : {}) } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
     env: {
-      ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN, RP_ID: 'localhost',
+      ...process.env, PORT: '0', ...home.env, ORIGIN, RP_ID: 'localhost',
       PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
     }
   });
-  const h = { api: '', log: '', dataDir };
+  const h = { api: '', log: '', home, dataDir };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   h.api = `http://127.0.0.1:${await boundPort(child, () => h.log)}`;
   h.req = async (method, p, { body, cookie, ip = '198.51.100.1', headers = {} } = {}) => {
     const r = await fetch(`${h.api}${p}`, {
@@ -102,7 +102,7 @@ async function startServer(t, { env = {}, users = [], creds = [], deviceLinks } 
     const setCookie = r.headers.getSetCookie().find(c => c.startsWith('gymsid=') && !c.startsWith('gymsid=;'));
     return { status: r.status, body: await r.json(), headers: r.headers, cookie: setCookie ? setCookie.split(';')[0] : null };
   };
-  h.db = () => JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
+  h.db = () => home.readDb();
   h.audit = () => { try { return fs.readFileSync(path.join(dataDir, 'audit.log'), 'utf8').trim().split('\n').map(l => JSON.parse(l)); } catch { return []; } };
   // A passkey assertion made for this request, the way Settings confirms before adding.
   h.stepUp = async (key, ip) => {
@@ -121,21 +121,21 @@ async function registerPasskey(h, name, ip) {
   assert.equal(opt.status, 200);
   return h.req('POST', '/api/register/verify', { body: { cid: opt.body.cid, credential: softPasskey().attestation(opt.body.options.challenge) }, ip });
 }
-const stored = (h, id) => h.db().users.find(u => u.id === id);
+const stored = async (h, id) => (await h.db()).users.find(u => u.id === id);
 
 test('the first password registration on an empty instance is the admin, the second is not', async t => {
   const h = await startServer(t, { env: { FIRST_USER_ADMIN: '1' } });
   const first = await registerPassword(h, 'Ana', '198.51.100.10');
   assert.equal(first.status, 200);
   assert.equal(first.body.user.admin, true);
-  assert.equal(stored(h, first.body.user.id).admin, true);
+  assert.equal((await stored(h, first.body.user.id)).admin, true);
   assert.equal((await h.req('GET', '/api/admin/users', { cookie: first.cookie })).status, 200);
   assert.ok(h.audit().some(e => e.ev === 'admin.first-user' && e.uid === first.body.user.id));
 
   const second = await registerPassword(h, 'Bea', '198.51.100.11');
   assert.equal(second.status, 200);
   assert.equal(second.body.user.admin, false);
-  assert.equal('admin' in stored(h, second.body.user.id), false);
+  assert.equal('admin' in (await stored(h, second.body.user.id)), false);
   assert.equal((await h.req('GET', '/api/admin/users', { cookie: second.cookie })).status, 403);
 });
 
@@ -144,11 +144,11 @@ test('the first passkey registration on an empty instance is the admin, the seco
   const first = await registerPasskey(h, 'Ana', '198.51.100.20');
   assert.equal(first.status, 200);
   assert.equal(first.body.user.admin, true);
-  assert.equal(stored(h, first.body.user.id).admin, true);
+  assert.equal((await stored(h, first.body.user.id)).admin, true);
   const second = await registerPasskey(h, 'Bea', '198.51.100.21');
   assert.equal(second.status, 200);
   assert.equal(second.body.user.admin, false);
-  assert.equal('admin' in stored(h, second.body.user.id), false);
+  assert.equal('admin' in (await stored(h, second.body.user.id)), false);
 });
 
 test('unset or FIRST_USER_ADMIN=0 leaves the first profile an ordinary one', async t => {
@@ -157,7 +157,7 @@ test('unset or FIRST_USER_ADMIN=0 leaves the first profile an ordinary one', asy
     const r = await registerPassword(h, 'Ana', '198.51.100.30');
     assert.equal(r.status, 200);
     assert.equal(r.body.user.admin, false, off);
-    assert.equal('admin' in stored(h, r.body.user.id), false, off);
+    assert.equal('admin' in (await stored(h, r.body.user.id)), false, off);
     const k = await registerPasskey(h, 'Bea', '198.51.100.31');
     assert.equal(k.body.user.admin, false, off);
   }
@@ -165,13 +165,13 @@ test('unset or FIRST_USER_ADMIN=0 leaves the first profile an ordinary one', asy
 
 test('an instance that already has profiles promotes nobody on upgrade or on a new registration', async t => {
   const h = await startServer(t, { env: { FIRST_USER_ADMIN: '1' }, users: [user('u1', 'Old'), user('u2', 'Older')] });
-  assert.equal(stored(h, 'u1').admin, undefined);
+  assert.equal((await stored(h, 'u1')).admin, undefined);
   const r = await registerPassword(h, 'New', '198.51.100.40');
   assert.equal(r.status, 200);
   assert.equal(r.body.user.admin, false);
   const k = await registerPasskey(h, 'Newer', '198.51.100.41');
   assert.equal(k.body.user.admin, false);
-  assert.equal(h.db().users.filter(u => u.admin === true).length, 0);
+  assert.equal((await h.db()).users.filter(u => u.admin === true).length, 0);
 });
 
 test('an ADMIN_UIDS admin stays an admin, and does not make the next profile one', async t => {

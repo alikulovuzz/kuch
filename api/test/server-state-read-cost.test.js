@@ -27,6 +27,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome, fileOnly } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -38,19 +39,18 @@ function mintSession(uid) {
 const headers = { Cookie: `gymsid=${mintSession('u_cost_1')}`, 'Content-Type': 'application/json' };
 
 async function startServer(t) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-statecost-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
+  const home = await dataHome({ t, prefix: 'gym-statecost-', secret: SECRET, db: {
     users: [{ id: 'u_cost_1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: []
-  }));
+  } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
   });
-  const h = { api: '', port: 0, dataDir, log: '' };
+  const h = { api: '', port: 0, home, dataDir, log: '' };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   // The boot line carries the port the listener bound, so it is both the address and the
   // readiness signal — see boundPort in helpers.mjs for why the test does not pick one.
   h.port = await boundPort(child, () => h.log);
@@ -68,6 +68,7 @@ async function keepAlive(t, port) {
   const sock = net.connect(port, '127.0.0.1');
   await new Promise(r => sock.once('connect', r));
   t.after(() => sock.destroy());
+  sock.on('error', () => {});   // the server is stopped first when the test ends, resetting it
   let buf = Buffer.alloc(0), want = null;
   const parse = () => {
     if (!want) return;
@@ -109,7 +110,6 @@ async function keepAlive(t, port) {
 test('a poll right after a sync reports the revision that sync returned, not the one before it', async t => {
   const h = await startServer(t);
   const c = await keepAlive(t, h.port);
-  const file = path.join(h.dataDir, 'state-u_cost_1.json');
 
   // The client's real loop: sync, poll, sync, poll. Every document here is the same length as the
   // last (only `_ts` and a one-digit `_rev` move), and each pair is inside one 4 ms tick, so
@@ -123,11 +123,11 @@ test('a poll right after a sync reports the revision that sync returned, not the
   }
   assert.deepEqual(stale, [], 'every poll saw the write that preceded it');
 
-  // and what the polls were reporting is what is actually on disk
-  assert.equal((await c.rev()).rev, JSON.parse(fs.readFileSync(file, 'utf8'))._rev);
+  // and what the polls were reporting is what is actually stored
+  assert.equal((await c.rev()).rev, (await h.home.readState('u_cost_1'))._rev);
 });
 
-test('the poll really is reading through the stat cache', async t => {
+test('the poll really is reading through the stat cache', { skip: fileOnly('probes the stat cache with a pinned mtime') }, async t => {
   const h = await startServer(t);
   const file = path.join(h.dataDir, 'state-u_cost_1.json');
   const rev = async () => (await fetch(`${h.api}/api/data/rev`, { headers }).then(r => r.json())).rev;
@@ -158,7 +158,9 @@ test('the poll really is reading through the stat cache', async t => {
 
 // The other two sites want `lang` for a push payload, which nothing outside the push service can
 // observe — so they are pinned here, at the only place that can see them: the source.
-test('the three hot-path state reads all go through readStateCached', () => {
+// The poll asks the store for the revision alone (readStateRev): the file backend answers it from
+// this same stat cache (store/file.js), Postgres from the rev and wid columns.
+test('the three hot-path state reads never parse the whole document', () => {
   const src = fs.readFileSync(path.join(API, 'server.js'), 'utf8');
   // Every route is one `'METHOD /path': async (req, res) => {` entry in the routes object, so a
   // handler runs from its key to the start of the next one.
@@ -168,7 +170,10 @@ test('the three hot-path state reads all go through readStateCached', () => {
     const end = src.indexOf("\n  '", at + 1);
     return src.slice(at, end === -1 ? undefined : end);
   };
-  for (const key of ['GET /api/data/rev', 'POST /api/push/test', 'POST /api/push/rest-timer']) {
+  const rev = handler('GET /api/data/rev');
+  assert.match(rev, /readStateRev\(user\.id\)/, 'the poll should ask for the revision alone');
+  assert.doesNotMatch(rev, /readState(Strict|Cached)?\(user\.id\)/, 'the poll reads the whole document');
+  for (const key of ['POST /api/push/test', 'POST /api/push/rest-timer']) {
     const body = handler(key);
     assert.match(body, /readStateCached\(user\.id\)/, `${key} should read through the cache`);
     assert.doesNotMatch(body, /readState\(user\.id\)/, `${key} parses the whole document again`);

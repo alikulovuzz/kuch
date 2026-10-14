@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData } from './helpers.mjs';
 
-tempData();
+await tempData();
 const { runPipeline } = await import('../coach/core/pipeline.js');
 const { buildPromptParts } = await import('../coach/core/prompt.js');
 

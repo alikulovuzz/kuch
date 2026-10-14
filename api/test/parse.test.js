@@ -9,7 +9,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData } from './helpers.mjs';
 
-tempData();
+await tempData();
 const { extractJSON, contractOK } = await import('../coach/core/parse.js');
 
 test('JSON is recovered from whatever the model wrapped it in', () => {

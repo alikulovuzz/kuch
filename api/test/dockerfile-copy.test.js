@@ -33,3 +33,31 @@ test('every root-level module server.js needs is on the Dockerfile COPY line', (
   assert.deepEqual(missing, [], `add ${missing.join(', ')} to the COPY line in api/Dockerfile`);
   for (const f of copied) assert.ok(fs.existsSync(path.join(API, f)), `${f} is copied but does not exist`);
 });
+
+// The same for directories: server.js importing `./store/index.js` needs a `COPY store ./store`.
+test('every directory server.js imports from has its own COPY line', () => {
+  const dirs = new Set([...read('server.js').matchAll(/(?:from\s+|import\s*\(\s*)['"]\.\/([^'"/]+)\/[^'"]+['"]/g)].map(m => m[1]));
+  assert.ok(dirs.has('store') && dirs.has('coach'), 'the walk finds store/ and coach/');
+  const lines = read('Dockerfile').split('\n');
+  const missing = [...dirs].filter(d => !lines.some(l => new RegExp(`^COPY\\s+${d}\\s+\\./${d}\\s*$`).test(l.trim())));
+  assert.deepEqual(missing, [], `add COPY ${missing.join(', ')} to api/Dockerfile`);
+});
+
+// The cutover runs the migration inside the image (`docker compose run --rm api node
+// scripts/migrate-json-to-pg.mjs`), so the script ships, and so does every api file it imports.
+test('the JSON-to-Postgres migration script and what it imports are in the image', () => {
+  const lines = read('Dockerfile').split('\n').map(l => l.trim());
+  assert.ok(lines.some(l => /^COPY\s+scripts\/migrate-json-to-pg\.mjs\s+\.\/scripts\/$/.test(l)), 'add COPY scripts/migrate-json-to-pg.mjs ./scripts/ to api/Dockerfile');
+  const copied = new Set(lines.find(l => /^COPY\s+server\.js\b/.test(l)).split(/\s+/).slice(1, -1));
+  for (const [, file] of read('scripts/migrate-json-to-pg.mjs').matchAll(/from\s+['"]\.\.\/([^'"]+)['"]/g)) {
+    const dir = file.includes('/') ? file.split('/')[0] : null;
+    assert.ok(dir ? lines.includes(`COPY ${dir} ./${dir}`) : copied.has(file), `the script imports ${file}, which the image does not carry`);
+  }
+});
+
+// Read from disk rather than imported, so the walks above cannot see it: without the SQL files the
+// Postgres backend refuses to start on a fresh database, and only in the image.
+test('the migrations the Postgres backend runs at startup are in the image', () => {
+  assert.match(read('store/pg.js'), /'\.\.', 'migrations'/, 'store/pg.js still reads api/migrations');
+  assert.ok(read('Dockerfile').split('\n').some(l => /^COPY\s+migrations\s+\.\/migrations\s*$/.test(l.trim())), 'add COPY migrations ./migrations to api/Dockerfile');
+});

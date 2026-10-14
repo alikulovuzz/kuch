@@ -19,6 +19,7 @@ Pick the part that matches what you're doing. If you just have a question, try t
 | [Self-hosting](SELF_HOSTING.md) | You're setting up an instance. Start here: running it, passkeys and HTTPS, users, backups, updates, troubleshooting |
 | [HTTPS at home](SELF_HOSTING_HTTPS.md) | You want valid certificates on your LAN without exposing the server to the internet |
 | [Kubernetes](SELF_HOSTING_KUBERNETES.md) | You run a cluster instead of Docker Compose |
+| [PostgreSQL](POSTGRES_MIGRATION.md) | You want accounts and workouts in PostgreSQL instead of JSON files, or are moving an existing instance across: cutover and rollback |
 | [AI coach](AI_COACH.md) | You're deciding whether to turn the coach on, and with which provider |
 | [MCP server](../mcp/README.md) | You want Claude Desktop, Cursor or another AI client to read your training history |
 | [NixOS](NIX.md) | You run NixOS and want Kuch native — flake packages and a NixOS module, no Docker |

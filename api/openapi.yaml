@@ -179,6 +179,10 @@ paths:
         The probe runs at most once every five seconds and the answer in between is
         the last one, so a poll can be that stale. The route is unauthenticated, and
         one disk write per request is not something to leave open to anyone.
+
+        With `STORAGE_BACKEND=postgres` it also queries the database, in the same
+        five-second window, and reports it as `database`; a database that does not
+        answer is a 503 too. The file backend leaves `database` out.
       security: []
       responses:
         '200':
@@ -193,19 +197,28 @@ paths:
                     type: integer
                     description: Number of registered user accounts.
                   writable: { type: boolean, const: true }
+                  database:
+                    type: string
+                    const: ok
+                    description: Postgres backend only.
               example: { ok: true, users: 7, writable: true }
         '503':
           description: >-
             The data directory could not be written — a full disk, or a mount that
-            came back read-only. Nothing that stores anything will work until it is
-            fixed; the reason is in the container log.
+            came back read-only — or, on the Postgres backend, the database does not
+            answer. Nothing that stores anything will work until it is fixed; the
+            reason is in the container log.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   ok: { type: boolean, const: false }
-                  writable: { type: boolean, const: false }
+                  writable: { type: boolean }
+                  database:
+                    type: string
+                    enum: [ok, down]
+                    description: Postgres backend only.
               example: { ok: false, writable: false }
 
   /api/config:

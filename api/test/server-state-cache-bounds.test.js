@@ -17,6 +17,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome, fileOnly } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -31,17 +32,17 @@ const mint = uid => {
 const headers = uid => ({ Cookie: `gymsid=${mint(uid)}` });
 
 async function startServer(t, env = {}) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-cachebound-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
+  const home = await dataHome({ t, prefix: 'gym-cachebound-', secret: SECRET });
+  const dataDir = home.dir;
   const users = [PROBE, ...FILLERS].map(id => ({ id, name: id, created: new Date().toISOString() }));
   fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users, creds: [], subs: [], invites: [] }));
   // Every filler needs a file of its own: a uid with no state file is never cached at all.
   for (const uid of FILLERS) fs.writeFileSync(path.join(dataDir, `state-${uid}.json`), JSON.stringify({ _rev: 1, workouts: [], routines: [] }));
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost', ...env }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost', ...env }
   });
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   let log = '';
   child.stdout.on('data', d => { log += d; });
   child.stderr.on('data', d => { log += d; });
@@ -58,7 +59,11 @@ const writePinned = (dir, uid, rev) => {
   fs.utimesSync(file, PINNED, PINNED);
 };
 
-test('the cache holds at most 64 users, and the least recently polled is the one dropped', async t => {
+// The probe is the file backend's cache key; Postgres keys its cache on the row's (rev, wid), and
+// store-pg.test.js covers that.
+const skip = fileOnly('probes the stat cache with a pinned mtime');
+
+test('the cache holds at most 64 users, and the least recently polled is the one dropped', { skip }, async t => {
   const h = await startServer(t);
   const rev = async uid => (await fetch(`${h.api}/api/data/rev`, { headers: headers(uid) }).then(r => r.json())).rev;
 
@@ -74,7 +79,7 @@ test('the cache holds at most 64 users, and the least recently polled is the one
   assert.equal(await rev(PROBE), 8, 'the probe was evicted, so its file was read again');
 });
 
-test('an entry nobody has polled for longer than the TTL is dropped', async t => {
+test('an entry nobody has polled for longer than the TTL is dropped', { skip }, async t => {
   const h = await startServer(t, { STATE_CACHE_TTL_MS: '150' });
   const rev = async uid => (await fetch(`${h.api}/api/data/rev`, { headers: headers(uid) }).then(r => r.json())).rev;
 

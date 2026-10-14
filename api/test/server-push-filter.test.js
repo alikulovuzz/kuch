@@ -14,6 +14,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -32,19 +33,18 @@ const keys = {
 };
 
 async function startServer(t, subs = []) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-push-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
+  const home = await dataHome({ t, prefix: 'gym-push-', secret: SECRET, db: {
     users: [{ id: 'u_test_1', name: 'One', created: new Date().toISOString() }], creds: [], subs, invites: []
-  }));
+  } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
   });
-  const h = { api: '', dataDir, log: '' };
+  const h = { api: '', home, dataDir, log: '' };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   // The boot line carries the port the listener bound, so it is both the address and the
   // readiness signal — see boundPort in helpers.mjs for why the test does not pick one.
   h.port = await boundPort(child, () => h.log);
@@ -93,6 +93,6 @@ test('a private literal already stored as an endpoint is refused at send time, n
   assert.equal(r.status, 200);
   assert.deepEqual(hits, [], 'no socket reached the private address');
   assert.match(h.log, /push endpoint refused u_test_1/);
-  const db = JSON.parse(fs.readFileSync(path.join(h.dataDir, 'db.json'), 'utf8'));
+  const db = await h.home.readDb();
   assert.equal(db.subs.length, 0, 'the unusable subscription is gone from db.json');
 });

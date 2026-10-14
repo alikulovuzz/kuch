@@ -35,6 +35,8 @@ async function load(dir, uid = 'alex') {
   vi.resetModules()
   vi.stubEnv('KUCH_DATA', dir)
   vi.stubEnv('KUCH_UID', uid)
+  vi.stubEnv('KUCH_DATABASE_URL', '')     // file mode, whatever the shell has set
+  vi.stubEnv('DATABASE_URL', '')
   return import('../src/state.js')
 }
 
@@ -44,13 +46,13 @@ afterAll(() => { dirs.forEach(d => fs.rmSync(d, { recursive: true, force: true }
 describe('a read failure is not "you never signed in"', () => {
   test('no state file at all is still null — that account really has never synced', async () => {
     const { getState } = await load(mk({ 'db.json': DB }))
-    expect(getState()).toBeNull()
+    expect(await getState()).toBeNull()
   })
 
   test('a corrupt state file throws EIO naming the parse failure', async () => {
     const { getState } = await load(mk({ 'db.json': DB, 'state-alex.json': '{ not json' }))
     let err = null
-    try { getState() } catch (e) { err = e }
+    try { await getState() } catch (e) { err = e }
     expect(err).toBeTruthy()
     expect(err.code).toBe('EIO')
     expect(err.message).toMatch(/state-alex\.json is not valid JSON/)
@@ -60,7 +62,7 @@ describe('a read failure is not "you never signed in"', () => {
   test('a state file that cannot be read throws EIO naming the failure, not null', async () => {
     const { getState } = await load(mk({ 'db.json': DB, 'state-alex.json': null }))
     let err = null
-    try { getState() } catch (e) { err = e }
+    try { await getState() } catch (e) { err = e }
     expect(err).toBeTruthy()
     expect(err.code).toBe('EIO')
     expect(err.message).toMatch(/cannot read state-alex\.json: EISDIR/)
@@ -74,7 +76,7 @@ describe('a read failure is not "you never signed in"', () => {
     fs.chmodSync(path.join(dir, 'state-alex.json'), 0o000)
     const { getState } = await load(dir)
     let err = null
-    try { getState() } catch (e) { err = e }
+    try { await getState() } catch (e) { err = e }
     fs.chmodSync(path.join(dir, 'state-alex.json'), 0o600)
     expect(err).toBeTruthy()
     expect(err.code).toBe('EIO')
@@ -84,7 +86,7 @@ describe('a read failure is not "you never signed in"', () => {
 
   test('a good state file still loads, with the app defaults merged in', async () => {
     const { getState } = await load(mk({ 'db.json': DB, 'state-alex.json': JSON.stringify({ unit: 'lb', routines: [{ id: 'r1', name: 'R', ex: [] }] }) }))
-    const S = getState()
+    const S = await getState()
     expect(S.unit).toBe('lb')
     expect(S.routines.length).toBe(1)
     expect(S.dayPlan).toEqual({})     // a default the snapshot did not carry
@@ -96,32 +98,32 @@ describe('config: KUCH_DATA / KUCH_UID, with the upstream OPENGYM_* names as a f
   const SAM = JSON.stringify({ unit: 'kg' })
   async function loadEnv(env) {
     vi.resetModules()
-    for (const k of ['KUCH_DATA', 'KUCH_UID', 'OPENGYM_DATA', 'OPENGYM_UID']) vi.stubEnv(k, env[k] ?? '')
+    for (const k of ['KUCH_DATA', 'KUCH_UID', 'OPENGYM_DATA', 'OPENGYM_UID', 'KUCH_DATABASE_URL', 'DATABASE_URL']) vi.stubEnv(k, env[k] ?? '')
     return import('../src/state.js')
   }
 
   test('KUCH_DATA and KUCH_UID pick the data dir and the profile', async () => {
     const dir = mk({ 'db.json': DB_MANY, 'state-alex.json': ALEX, 'state-third-account.json': SAM })
     const { getState } = await loadEnv({ KUCH_DATA: dir, KUCH_UID: 'alex' })
-    expect(getState().unit).toBe('lb')
+    expect((await getState()).unit).toBe('lb')
   })
 
   test('an existing client config with only OPENGYM_DATA and OPENGYM_UID still reads its profile', async () => {
     const dir = mk({ 'db.json': DB_MANY, 'state-alex.json': ALEX, 'state-third-account.json': SAM })
     const { getState } = await loadEnv({ OPENGYM_DATA: dir, OPENGYM_UID: 'alex' })
-    expect(getState().unit).toBe('lb')
+    expect((await getState()).unit).toBe('lb')
   })
 
   test('when both are set, the KUCH_* names win', async () => {
     const kuch = mk({ 'db.json': DB_MANY, 'state-alex.json': ALEX, 'state-third-account.json': SAM })
     const old = mk({ 'db.json': DB_MANY, 'state-alex.json': SAM, 'state-third-account.json': SAM })
     const { getState } = await loadEnv({ KUCH_DATA: kuch, KUCH_UID: 'alex', OPENGYM_DATA: old, OPENGYM_UID: 'third-account' })
-    expect(getState().unit).toBe('lb')
+    expect((await getState()).unit).toBe('lb')
   })
 
   test('a missing data dir is reported under the new name', async () => {
     const { getState } = await loadEnv({ KUCH_DATA: path.join(os.tmpdir(), 'mcp-state-does-not-exist') })
-    expect(() => getState()).toThrow(/KUCH_DATA dir does not exist/)
+    await expect(getState()).rejects.toThrow(/KUCH_DATA dir does not exist/)
   })
 })
 
@@ -139,7 +141,7 @@ describe('the "which profile?" error is a config message, not a roster', () => {
       const dir = mk(files)
       const { getState } = await load(dir, '')       // no KUCH_UID pinned
       let err = null
-      try { getState() } catch (e) { err = e }
+      try { await getState() } catch (e) { err = e }
       spy.mockRestore()
       expect(err).toBeTruthy()
       expect(err.code).toBe('EINVAL')
@@ -153,4 +155,45 @@ describe('the "which profile?" error is a config message, not a roster', () => {
       for (const u of uids) expect(logs.join('\n')).toContain(u)
     })
   }
+})
+
+// Once the data has moved to Postgres nothing writes these files again, and answering from them
+// would serve the day of the cutover forever, with no error. The migration script drops the
+// marker; file mode refuses while it is there.
+describe('a data directory migrated to Postgres is refused, not served frozen', () => {
+  const MARKER = 'MIGRATED-TO-POSTGRES'
+  const synced = () => ({ 'db.json': DB, 'state-alex.json': JSON.stringify({ unit: 'lb' }) })
+
+  async function refusal(promise) {
+    const err = await promise.then(() => null, e => e)
+    expect(err).toBeTruthy()
+    expect(err.code).toBe('EMIGRATED')
+    expect(err.message).toMatch(/migrated to PostgreSQL/)
+    expect(err.message).toMatch(/KUCH_DATABASE_URL/)
+    return err
+  }
+
+  test('getState, getUser and init all refuse while the marker exists', async () => {
+    const dir = mk({ ...synced(), [MARKER]: '' })
+    const { getState, getUser, init } = await load(dir)
+    const err = await refusal(getState())
+    expect(err.message).not.toContain(dir)
+    await refusal(getUser())
+    await refusal(init())
+  })
+
+  test('a marker that appears while the server runs stops the very next call', async () => {
+    const dir = mk(synced())
+    const { getState, getUser } = await load(dir)
+    expect((await getState()).unit).toBe('lb')
+    fs.writeFileSync(path.join(dir, MARKER), '')
+    await refusal(getState())
+    await refusal(getUser())
+  })
+
+  test('without the marker nothing changes', async () => {
+    const { getState, getUser } = await load(mk(synced()))
+    expect((await getState()).unit).toBe('lb')
+    expect((await getUser()).name).toBe('Alex')
+  })
 })

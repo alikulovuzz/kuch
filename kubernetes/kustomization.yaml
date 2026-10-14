@@ -8,3 +8,6 @@ resources:
   - deployment.yaml
   - service.yaml
   - httproute.yaml
+  # PostgreSQL (STORAGE_BACKEND=postgres): create the kuch-postgres Secret first, then uncomment
+  # this and the two env entries in deployment.yaml. docs/SELF_HOSTING_KUBERNETES.md
+  # - postgres.yaml

@@ -10,7 +10,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData } from './helpers.mjs';
 
-tempData();
+await tempData();
 const { isDue } = await import('../coach/cadence.js');
 
 const DAY = 86400000, MIN = 60000;

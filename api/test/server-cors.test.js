@@ -12,21 +12,21 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function startServer(t) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-cors-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), 'c'.repeat(64), { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: [], creds: [], subs: [], invites: [] }));
+  const home = await dataHome({ t, prefix: 'gym-cors-', secret: 'c'.repeat(64), db: { users: [], creds: [], subs: [], invites: [] } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'https://gym.example.com', RP_ID: 'gym.example.com' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'https://gym.example.com', RP_ID: 'gym.example.com' }
   });
   let log = '';
   child.stdout.on('data', d => log += d);
   child.stderr.on('data', d => log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   return await boundPort(child, () => log);
 }
 

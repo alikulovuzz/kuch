@@ -7,6 +7,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -22,19 +23,18 @@ const keys = {
 };
 
 async function startServer(t, allowedPrivateIps) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-allowed-ips-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
+  const home = await dataHome({ t, prefix: 'gym-allowed-ips-', secret: SECRET, db: {
     users: [{ id: 'u_test_1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: []
-  }));
+  } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost', ALLOWED_PRIVATE_IPS: allowedPrivateIps }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost', ALLOWED_PRIVATE_IPS: allowedPrivateIps }
   });
   const h = { log: '' };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   h.api = `http://127.0.0.1:${await boundPort(child, () => h.log)}`;
   h.subscribe = async endpoint => (await fetch(`${h.api}/api/push/subscribe`, {
     method: 'POST', headers: cookie, body: JSON.stringify({ subscription: { endpoint, keys } })

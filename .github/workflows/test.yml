@@ -13,6 +13,9 @@ on:
       - 'scripts/build-api-docs.mjs'
       - 'website/api.html'
       - 'api/coach/prompts/**'
+      - 'web/**'
+      - 'docker-compose.yml'
+      - '.env.example'
       - '.github/workflows/test.yml'
   push:
     branches: [main, coach]
@@ -25,6 +28,9 @@ on:
       - 'scripts/build-api-docs.mjs'
       - 'website/api.html'
       - 'api/coach/prompts/**'
+      - 'web/**'
+      - 'docker-compose.yml'
+      - '.env.example'
       - '.github/workflows/test.yml'
   workflow_dispatch:
 
@@ -68,6 +74,24 @@ jobs:
 
   mcp:
     runs-on: ubuntu-latest
+    # The Postgres reader's tests (mcp/test/state-pg.test.js) make their own schemas in this
+    # job's throwaway database, as the api's do; without it they skip.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: kuch
+          POSTGRES_PASSWORD: kuch
+          POSTGRES_DB: kuch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kuch -d kuch_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL_TEST: postgres://kuch:kuch@localhost:5432/kuch_test
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -88,6 +112,25 @@ jobs:
 
   api:
     runs-on: ubuntu-latest
+    # The suite runs on both storage backends: the JSON files (npm test), then PostgreSQL (npm run
+    # test:pg, test/backend.mjs), every test on a throwaway schema of this database. The password
+    # is this job's own throwaway database's, not a secret.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: kuch
+          POSTGRES_PASSWORD: kuch
+          POSTGRES_DB: kuch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kuch -d kuch_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      DATABASE_URL_TEST: postgres://kuch:kuch@localhost:5432/kuch_test
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -102,6 +145,8 @@ jobs:
       - run: npm ci --omit=optional
         working-directory: api
       - run: npm test
+        working-directory: api
+      - run: npm run test:pg
         working-directory: api
       # The api's copy of the exercise catalogue is generated and committed. A dataset change
       # that forgets to regenerate it would otherwise only surface as "the Coach can't find
@@ -180,3 +225,41 @@ jobs:
           # canDropPrivileges() fails closed, so a missing `coach` user disables every job —
           # including the fixture provider. Cheaper to assert here than to discover on an instance.
           docker run --rm kuch-api:default id coach
+
+  # docker-compose.yml the way an owner runs it on PostgreSQL (docs/POSTGRES_MIGRATION.md): the
+  # postgres service healthy, the api migrated onto it and answering, web in front of both. Also
+  # that a .env without any of it still describes the stack it always did, api and web alone.
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: on the JSON files, compose runs api and web only
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          test "$(docker compose config --services | sort | tr '\n' ' ')" = "api web "
+
+      - name: .env for PostgreSQL
+        run: |
+          cat >> .env <<ENV
+          COMPOSE_PROFILES=postgres
+          STORAGE_BACKEND=postgres
+          POSTGRES_PASSWORD=$(openssl rand -hex 24)
+          ENV
+          docker compose config --quiet
+          test "$(docker compose config --services | sort | tr '\n' ' ')" = "api postgres web "
+
+      - run: docker compose up -d --build
+
+      - name: postgres is healthy, and the api answers on it through web
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://localhost:8080/api/health 2>/dev/null | grep -q '"database":"ok"' && break
+            sleep 2
+          done
+          curl -fsS http://localhost:8080/api/health | tee /dev/stderr | grep -q '"database":"ok"'
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q postgres)")" = healthy
+
+      - if: failure()
+        run: docker compose ps -a && docker compose logs

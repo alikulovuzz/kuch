@@ -566,7 +566,9 @@ are not encrypted at rest — whoever can read that folder can see them.
 
 ## 6. Backups
 
-Everything is in `./data`:
+On the JSON files (the default), everything is in `./data`. On PostgreSQL, accounts and training
+data are in the database instead, and `./data` holds the rest: see
+[On PostgreSQL](#on-postgresql) below.
 
 ```bash
 tar czf kuch-backup-$(date +%F).tar.gz data/
@@ -599,6 +601,51 @@ needs backing up: if you lose it, sign the provider in again.
 API keys for the HTTPS providers (Anthropic, OpenAI, Gemini, a compatible endpoint) are the
 other way round: they are in `./data/coach.json`, encrypted with `./data/secret`, so they *are*
 in this archive — and unreadable without the secret next to them, like everything else in it.
+
+### On PostgreSQL
+
+With `STORAGE_BACKEND=postgres` ([POSTGRES_MIGRATION.md](POSTGRES_MIGRATION.md)) a backup has two
+parts, and the `tar` above covers only the second.
+
+**1. The database, with `pg_dump`.** It lives in the `pgdata` volume, outside `./data`. Copying
+that volume while PostgreSQL runs does not give you a usable backup; a dump does, and the API can
+keep running while it is taken:
+
+```bash
+docker compose exec -T postgres pg_dump -U kuch -d kuch -Fc > kuch-db-$(date +%F).dump
+```
+
+Run it nightly from cron on the host (`%` has to be escaped there):
+
+```cron
+30 3 * * * cd /srv/kuch && docker compose exec -T postgres pg_dump -U kuch -d kuch -Fc > backups/kuch-db-$(date +\%F).dump
+```
+
+Under Windows PowerShell 5, `>` re-encodes the output and breaks a binary dump. Write it inside
+the container and copy it out instead: `pg_dump … -Fc -f /tmp/kuch.dump`, then
+`docker compose cp postgres:/tmp/kuch.dump .`. Use your own `POSTGRES_USER` and `POSTGRES_DB` if
+you changed them.
+
+**2. The files that stay files.** Take them right after the dump:
+
+```bash
+tar czf kuch-backup-$(date +%F).tar.gz data/
+```
+
+The ones that matter are `secret` (every session cookie and the Coach's stored keys depend on it;
+lose it and everyone is signed out), `vapid.json` (lose it and every push subscription stops
+working), `coach.json` and `coach/`, and `uploads/`. The `db.json` and `state-*.json` still in
+`./data` are the copy from before the migration. PostgreSQL no longer updates them.
+
+**Restoring** needs the API stopped. It holds every account in memory and would write its copy
+back over a restore it did not see:
+
+```bash
+docker compose stop api
+docker compose exec -T postgres pg_restore -U kuch -d kuch --clean --if-exists < kuch-db-2026-10-14.dump
+tar xzf kuch-backup-2026-10-14.tar.gz          # the files, from the same night
+docker compose start api
+```
 
 ## 7. Notifications
 
@@ -676,7 +723,9 @@ docker compose up -d --build
 ```
 
 The app shell is versioned (`?v=N`) so clients pick up changes on next load. Your `./data` is
-untouched; the exercise media come with the new image.
+untouched; the exercise media come with the new image. On PostgreSQL, so is the database: the API
+applies any new schema migrations itself at startup. The `postgres` service is pinned to major
+version 17, and moving to a newer major version takes a dump and a restore, not just a pull.
 
 ## Passkeys fail even though `RP_ID` looks right
 

@@ -10,6 +10,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -21,19 +22,18 @@ function mintSession(uid, sv = 0) {
 const headers = uid => ({ Cookie: `gymsid=${mintSession(uid)}`, 'Content-Type': 'application/json' });
 
 async function startServer(t) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-rev-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({
+  const home = await dataHome({ t, prefix: 'gym-rev-', secret: SECRET, db: {
     users: [{ id: 'u_rev_1', name: 'One', created: new Date().toISOString() }], creds: [], subs: [], invites: []
-  }));
+  } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost' }
   });
-  const h = { api: '', log: '', dataDir };
+  const h = { api: '', log: '', home, dataDir };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   // The boot line carries the port the listener bound, so it is both the address and the
   // readiness signal — see boundPort in helpers.mjs for why the test does not pick one.
   h.port = await boundPort(child, () => h.log);
@@ -46,7 +46,7 @@ test('GET/PUT /api/data: revisions, conditional writes and the legacy overwrite'
   const uid = 'u_rev_1';
   const get = async () => { const r = await fetch(`${h.api}/api/data`, { headers: headers(uid) }); return { status: r.status, body: await r.json() }; };
   const put = async body => { const r = await fetch(`${h.api}/api/data`, { method: 'PUT', headers: headers(uid), body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
-  const onDisk = () => JSON.parse(fs.readFileSync(path.join(h.dataDir, `state-${uid}.json`), 'utf8'));
+  const onDisk = () => h.home.readState(uid);
 
   // nothing synced yet
   let r = await get();
@@ -59,8 +59,8 @@ test('GET/PUT /api/data: revisions, conditional writes and the legacy overwrite'
   assert.equal(r.body.ok, true);
   assert.equal(r.body.rev, 1);
   assert.equal(r.body.ts, 100);
-  assert.equal(onDisk()._rev, 1);
-  assert.equal('active' in onDisk(), false, 'active is stripped');
+  assert.equal((await onDisk())._rev, 1);
+  assert.equal('active' in (await onDisk()), false, 'active is stripped');
 
   r = await get();
   assert.equal(r.body.rev, 1);
@@ -74,19 +74,19 @@ test('GET/PUT /api/data: revisions, conditional writes and the legacy overwrite'
   assert.equal(r.body.error, 'conflict');
   assert.equal(r.body.rev, 1);
   assert.deepEqual(r.body.state.workouts.map(w => w.id), ['w1']);
-  assert.deepEqual(onDisk().workouts.map(w => w.id), ['w1'], 'a refused write changes nothing');
+  assert.deepEqual((await onDisk()).workouts.map(w => w.id), ['w1'], 'a refused write changes nothing');
 
   // a client from before revisions sends no baseRev and overwrites, as it always did
   r = await put({ state: { _ts: 300, workouts: [{ id: 'w2', d: '2026-09-02' }], routines: [] } });
   assert.equal(r.status, 200);
   assert.equal(r.body.rev, 2);
-  assert.deepEqual(onDisk().workouts.map(w => w.id), ['w2']);
+  assert.deepEqual((await onDisk()).workouts.map(w => w.id), ['w2']);
 
   // a matching baseRev goes through; a client-supplied _rev is ignored
   r = await put({ state: { _ts: 400, _rev: 99, workouts: [{ id: 'w3', d: '2026-09-03' }], routines: [] }, baseRev: 2 });
   assert.equal(r.status, 200);
   assert.equal(r.body.rev, 3);
-  assert.equal(onDisk()._rev, 3);
+  assert.equal((await onDisk())._rev, 3);
 
   // an explicit null is "no baseRev", not "rev null"
   r = await put({ state: { _ts: 500, workouts: [], routines: [] }, baseRev: null });
@@ -101,7 +101,7 @@ test('GET/PUT /api/data: revisions, conditional writes and the legacy overwrite'
   r = await put({ state: { workouts: 'nope' }, baseRev: 4 });
   assert.equal(r.status, 400);
   assert.equal(r.body.error, 'invalid state');
-  assert.equal(onDisk()._rev, 4);
+  assert.equal((await onDisk())._rev, 4);
 });
 
 // `{}` keeps every rule this route has and still empties the profile: it is
@@ -115,7 +115,7 @@ test('PUT /api/data refuses an empty object, which would wipe the profile and ke
   const uid = 'u_rev_1';
   const put = async body => { const r = await fetch(`${h.api}/api/data`, { method: 'PUT', headers: headers(uid), body: JSON.stringify(body) }); return { status: r.status, body: await r.json() }; };
   const rev = async () => (await fetch(`${h.api}/api/data/rev`, { headers: headers(uid) }).then(r => r.json())).rev;
-  const onDisk = () => JSON.parse(fs.readFileSync(path.join(h.dataDir, `state-${uid}.json`), 'utf8'));
+  const onDisk = () => h.home.readState(uid);
 
   assert.equal((await put({ state: { _ts: 100, workouts: [{ id: 'w1', d: '2026-09-01' }], routines: [] } })).status, 200);
   assert.equal(await rev(), 1);
@@ -129,7 +129,7 @@ test('PUT /api/data refuses an empty object, which would wipe the profile and ke
     assert.equal(r.body.error, 'state required');
   }
   assert.equal(await rev(), 1, 'nothing was written');
-  assert.deepEqual(onDisk().workouts.map(w => w.id), ['w1'], 'the profile is still there');
+  assert.deepEqual((await onDisk()).workouts.map(w => w.id), ['w1'], 'the profile is still there');
 
   // …and a document that carries one real key alongside them is a profile, and goes through.
   assert.equal((await put({ state: { _rev: 99, _ts: 1, routines: [] }, baseRev: 1, stamped: true })).status, 200);

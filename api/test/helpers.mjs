@@ -5,9 +5,8 @@
  * import. Hence dynamic imports everywhere below, and one helper that does it in the right
  * order. node:test runs each file in its own process, so one directory per file is enough.
  */
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { after } from 'node:test';
+import { dataHome, ON_PG } from './backend.mjs';
 
 /* The port a spawned server.js actually bound.
  *
@@ -42,15 +41,21 @@ export function boundPort(child, tail = () => '') {
   });
 }
 
-export function tempData() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coach-test-'));
-  fs.writeFileSync(path.join(dir, 'secret'), 'a'.repeat(64), { mode: 0o600 });
-  process.env.DATA_DIR = dir;
-  return dir;
+/* A data home for the whole file (backend.mjs), made the one this process's modules use: await it
+   before the first import of anything that reads DATA_DIR or the store. */
+const homes = new Map();   // dir -> home
+export async function tempData() {
+  // The store those modules opened holds a connection on Postgres; it goes before its schema does.
+  if (ON_PG) after(async () => { const { store } = await import('../store/index.js'); await store.close(); });
+  const home = await dataHome({ prefix: 'coach-test-', secret: 'a'.repeat(64) });
+  Object.assign(process.env, home.env);
+  homes.set(home.dir, home);
+  return home.dir;
 }
 
+/** A profile's training document in the data home tempData made. */
 export function writeState(dir, uid, S) {
-  fs.writeFileSync(path.join(dir, 'state-' + uid + '.json'), JSON.stringify(S));
+  return homes.get(dir).writeState(uid, S);
 }
 
 /** A day `n` days before now, as the app stores it (YYYY-MM-DD). */

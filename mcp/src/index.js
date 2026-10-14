@@ -5,7 +5,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { TOOLS } from './tools.js'
-import { init, getUser } from './state.js'
+import { init, getUser, source } from './state.js'
 
 const server = new McpServer({
   name: 'kuch',
@@ -16,9 +16,9 @@ const server = new McpServer({
 // the no-state sentinel. Always register every tool so the LLM sees the full list at
 // handshake, even when state didn't resolve.
 try {
-  init()
-  const u = getUser()
-  console.error(`[kuch-mcp] serving profile ${u.name} (${u.id})`)
+  await init()
+  const u = await getUser()
+  console.error(`[kuch-mcp] serving profile ${u.name} (${u.id}) from ${source()}`)
 } catch (e) {
   console.error(`[kuch-mcp] ${e.message}`)
   // Don't exit — keep the tool listings up so the user sees a useful error after fixing their
@@ -32,7 +32,7 @@ for (const t of TOOLS) {
     t.schema,
     async (params) => {
       try {
-        const result = t.handler(params || {})
+        const result = await t.handler(params || {})
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
       } catch (err) {
         const code = err.code || 'ERROR'

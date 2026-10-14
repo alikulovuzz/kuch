@@ -12,6 +12,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { boundPort } from './helpers.mjs';
+import { dataHome } from './backend.mjs';
 
 const API = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SECRET = crypto.randomBytes(32).toString('hex');
@@ -25,21 +26,23 @@ function mintSession(uid) {
 }
 
 async function startServer(t, subs = [sub]) {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gym-nudge-'));
-  fs.writeFileSync(path.join(dataDir, 'secret'), SECRET, { mode: 0o600 });
-  fs.writeFileSync(path.join(dataDir, 'db.json'), JSON.stringify({ users: USERS, creds: [], subs, invites: [] }));
+  const home = await dataHome({ t, prefix: 'gym-nudge-', secret: SECRET, db: { users: USERS, creds: [], subs, invites: [] } });
+  const dataDir = home.dir;
   const child = spawn(process.execPath, ['server.js'], {
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost', REMINDER_TICK_MS: '200' }
+    env: { ...process.env, PORT: '0', ...home.env, ORIGIN: 'http://localhost:8080', RP_ID: 'localhost', REMINDER_TICK_MS: '200' }
   });
-  const h = { dataDir, child, log: '' };
+  const h = { home, dataDir, child, log: '' };
   child.stdout.on('data', d => h.log += d);
   child.stderr.on('data', d => h.log += d);
-  t.after(() => { child.kill('SIGKILL'); fs.rmSync(dataDir, { recursive: true, force: true }); });
+  home.own(child);
   h.port = await boundPort(child, () => h.log);
   h.api = `http://127.0.0.1:${h.port}`;
-  h.write = state => fs.writeFileSync(path.join(dataDir, 'state-' + UID + '.json'), JSON.stringify(state));
-  h.db = () => JSON.parse(fs.readFileSync(path.join(dataDir, 'db.json'), 'utf8'));
+  // A new revision each time, as every real write has: on Postgres the tick's cached read notices
+  // a document by its revision.
+  let rev = 0;
+  h.write = state => home.writeState(UID, { _rev: ++rev, ...state });
+  h.db = () => home.readDb();
   return h;
 }
 
@@ -70,12 +73,12 @@ async function until(pred, ms = 15000) {
 test('fires once on the evening of a missed planned day, in the user\'s zone', async t => {
   const tz = zoneAt(20);
   const h = await startServer(t);
-  h.write(missedToday(tz));
+  await h.write(missedToday(tz));
   await until(() => firings(h.log) > 0);
   assert.equal(firings(h.log), 1, h.log);
   await wait(1200);  // several more ticks: once per local date
   assert.equal(firings(h.log), 1, 'fired twice in one evening');
-  assert.equal(h.db().users[0].lastNudge, dateIn(tz));
+  assert.equal((await h.db()).users[0].lastNudge, dateIn(tz));
   // the plain reminder (08:00 there) is long past its window and stays out of it
   assert.doesNotMatch(h.log, /reminder firing/);
 });
@@ -95,13 +98,13 @@ test('silent outside the evening, on a rest day, on a trained day, and when swit
     ['back-off: 3 missed days in a row already', missedToday(eve, { workouts: [{ id: 'w0', d: daysAgo(eve, 4), routineId: 'r1' }] })],
   ];
   for (const [name, state] of cases) {
-    h.write(state);
+    await h.write(state);
     await wait(700);
     assert.equal(firings(h.log), 0, `${name}:\n${h.log}`);
   }
-  assert.equal(h.db().users[0].lastNudge, undefined);
+  assert.equal((await h.db()).users[0].lastNudge, undefined);
   // …and the same server does fire once the day really is a missed one
-  h.write(missedToday(eve));
+  await h.write(missedToday(eve));
   await until(() => firings(h.log) > 0);
   assert.equal(firings(h.log), 1, h.log);
 });
@@ -119,7 +122,7 @@ test('no push subscription, or a workout on screen right now: no nudge', async t
     body: JSON.stringify({ active: true, name: 'Push Day', startedAt: Date.now() })
   });
   assert.equal(live.status, 200);
-  h.write(missedToday(tz));
+  await h.write(missedToday(tz));
   await wait(1000);
   assert.equal(firings(h.log), 0, `a session is under way:\n${h.log}`);
   // the session ends without a workout being saved: the nudge is owed again

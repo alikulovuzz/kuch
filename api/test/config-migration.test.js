@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { tempData } from './helpers.mjs';
 
-const dir = tempData();
+const dir = await tempData();
 const cfg = await import('../coach/config.js');
 const FILE = path.join(dir, 'coach.json');
 

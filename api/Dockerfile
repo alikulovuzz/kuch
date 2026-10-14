@@ -53,7 +53,13 @@ RUN npm ci --omit=dev --omit=optional && npm cache clean --force
 
 # Every module server.js imports from the api root has to be named here: the image carries nothing
 # else, and one that is missing only shows at boot, as ERR_MODULE_NOT_FOUND.
-COPY server.js push-messages.js nudge.js nudge-copy.js verify-error.js password.js rate-limit.js passkeys-store.js device-link.js media.js queue.js sync-stamps.js durable.js ./
+COPY server.js push-messages.js nudge.js nudge-copy.js verify-error.js password.js rate-limit.js passkeys-store.js device-link.js media.js queue.js sync-stamps.js durable.js keyed-lock.js ./
+COPY store ./store
+# The schema the Postgres backend applies at startup (store/migrate.js), read from disk.
+COPY migrations ./migrations
+# The one-off copy of db.json and the state files into Postgres, run in this image at cutover
+# (docs/POSTGRES_MIGRATION.md). It imports only durable.js and store/, both already here.
+COPY scripts/migrate-json-to-pg.mjs ./scripts/
 COPY coach ./coach
 ENV NODE_ENV=production
 ENV PORT=3000

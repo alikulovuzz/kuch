@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { tempData, writeState, sampleState } from './helpers.mjs';
 
-const DIR = tempData();
+const DIR = await tempData();
 const cfg = await import('../coach/config.js');
 const jobs = await import('../coach/jobs.js');
 const cohort = await import('../coach/cohort.js');
@@ -25,29 +25,29 @@ const lifter = (w1, w2, { unit = 'kg', weeks = 4 } = {}) => sampleState({
 const e = (w, r) => w * (1 + Math.min(r, 12) / 30);
 
 cfg.save({ enabled: true, provider: 'fixture', community: true });
-writeState(DIR, 'a', lifter(100, 40));
-writeState(DIR, 'b', lifter(80, 30));
-writeState(DIR, 'c', lifter(60, null));
-writeState(DIR, 'd', lifter(220, 88, { unit: 'lb', weeks: 8 }));   // ≈ 100 kg / 40 kg
-writeState(DIR, 'quiet', lifter(500, 500));                         // never opts in
+await writeState(DIR, 'a', lifter(100, 40));
+await writeState(DIR, 'b', lifter(80, 30));
+await writeState(DIR, 'c', lifter(60, null));
+await writeState(DIR, 'd', lifter(220, 88, { unit: 'lb', weeks: 8 }));   // ≈ 100 kg / 40 kg
+await writeState(DIR, 'quiet', lifter(500, 500));                         // never opts in
 
-test('a profile that does not share sees nothing, whatever the others do', () => {
-  assert.deepEqual(cohort.computeCohort('a'), { ok: false, enabled: true, sharing: false });
-  assert.equal(cohort.cohortForPayload('a'), null);
+test('a profile that does not share sees nothing, whatever the others do', async () => {
+  assert.deepEqual(await cohort.computeCohort('a'), { ok: false, enabled: true, sharing: false });
+  assert.equal(await cohort.cohortForPayload('a'), null);
 });
 
-test('below the minimum headcount there are no numbers, only how many are missing', () => {
+test('below the minimum headcount there are no numbers, only how many are missing', async () => {
   jobs.setShare('a', true); jobs.setShare('b', true);
-  const r = cohort.computeCohort('a');
+  const r = await cohort.computeCohort('a');
   assert.equal(r.ok, false);
   assert.equal(r.people, 2);
   assert.equal(r.minPeople, cohort.MIN_PEOPLE);
-  assert.equal(cohort.cohortForPayload('a'), null);
+  assert.equal(await cohort.cohortForPayload('a'), null);
 });
 
-test('medians, headcounts and the requester\'s own numbers; warm-ups never count', () => {
+test('medians, headcounts and the requester\'s own numbers; warm-ups never count', async () => {
   jobs.setShare('c', true); jobs.setShare('d', true);
-  const r = cohort.computeCohort('a');
+  const r = await cohort.computeCohort('a');
   assert.equal(r.ok, true);
   assert.equal(r.people, 4);
   assert.equal(r.unit, 'kg');
@@ -68,45 +68,45 @@ test('medians, headcounts and the requester\'s own numbers; warm-ups never count
   // a is the strongest on 0001 (3 of 3 others at or below) and joint-top on 0002 with d's
   // 88 lb ≈ 39.9 kg just under 40 → 2 of 2 → rank 100.
   assert.equal(r.rankPct, 100);
-  assert.equal(cohort.computeCohort('c').rankPct, 0);
+  assert.equal((await cohort.computeCohort('c')).rankPct, 0);
 });
 
-test('a requester in pounds gets pounds back; the prompt always gets kilograms', () => {
-  const r = cohort.computeCohort('d');
+test('a requester in pounds gets pounds back; the prompt always gets kilograms', async () => {
+  const r = await cohort.computeCohort('d');
   assert.equal(r.unit, 'lb');
   const ex1 = r.exercises.find(x => x.id === '0001');
   assert.equal(ex1.you, Math.round(e(220, 5) * 10) / 10);
-  const p = cohort.cohortForPayload('d');
+  const p = await cohort.cohortForPayload('d');
   assert.equal(p.unit, 'kg');
   assert.equal(p.people, 4);
   assert.equal(p.exercises.find(x => x.id === '0001').you, Math.round(e(220 * 0.45359237, 5) * 10) / 10);
   assert.ok(!('people' in p.exercises[0]));
 });
 
-test('opting out takes effect immediately, cache or no cache', () => {
-  assert.equal(cohort.computeCohort('a').people, 4);
+test('opting out takes effect immediately, cache or no cache', async () => {
+  assert.equal((await cohort.computeCohort('a')).people, 4);
   jobs.setShare('d', false);
-  const r = cohort.computeCohort('a');
+  const r = await cohort.computeCohort('a');
   assert.equal(r.people, 3);
   assert.equal(r.exercises.find(x => x.id === '0002'), undefined);   // only two left on it
   jobs.setShare('a', false);
-  assert.equal(cohort.computeCohort('a').sharing, false);
-  assert.equal(cohort.computeCohort('b').ok, false);                  // two sharing
+  assert.equal((await cohort.computeCohort('a')).sharing, false);
+  assert.equal((await cohort.computeCohort('b')).ok, false);                  // two sharing
 });
 
-test('the admin switch decides whether the prompt ever sees a cohort', () => {
+test('the admin switch decides whether the prompt ever sees a cohort', async () => {
   jobs.setShare('a', true); jobs.setShare('d', true);
-  assert.ok(cohort.cohortForPayload('a'));
+  assert.ok(await cohort.cohortForPayload('a'));
   cfg.save({ community: false });
-  assert.equal(cohort.cohortForPayload('a'), null);
+  assert.equal(await cohort.cohortForPayload('a'), null);
   cfg.save({ community: true });
 });
 
-test('forgetting a profile takes it out of the room at once, cache or no cache', () => {
-  assert.equal(cohort.computeCohort('a').people, 4);
+test('forgetting a profile takes it out of the room at once, cache or no cache', async () => {
+  assert.equal((await cohort.computeCohort('a')).people, 4);
   jobs.clearUser('b');
   assert.equal(jobs.isSharing('b'), false);
-  assert.equal(cohort.computeCohort('a').people, 3);
+  assert.equal((await cohort.computeCohort('a')).people, 3);
 });
 
 test('three accounts that log the same made-up exercise cannot write into a fourth one\'s prompt', async () => {
@@ -121,16 +121,16 @@ test('three accounts that log the same made-up exercise cannot write into a four
       { id: 'c' + 'k7x2', sets: [{ w: 50, r: 5, done: true }] }   // a custom id they all happen to share
     ] }]
   });
-  for (const uid of ['x1', 'x2', 'x3']) { writeState(DIR, uid, attacker()); jobs.setShare(uid, true); }
+  for (const uid of ['x1', 'x2', 'x3']) { await writeState(DIR, uid, attacker()); jobs.setShare(uid, true); }
   const victim = lifter(70, 30);
-  writeState(DIR, 'victim', victim);
+  await writeState(DIR, 'victim', victim);
   jobs.setShare('victim', true);
 
-  const room = cohort.cohortForPayload('victim');
+  const room = await cohort.cohortForPayload('victim');
   assert.ok(room && room.people >= cohort.MIN_PEOPLE, 'the room is open, so the check below is a real one');
   assert.ok(room.exercises.length > 0);
   assert.ok(room.exercises.every(x => /^\d{4}$/.test(x.id) && x.name), 'catalogue exercises only, each by its catalogue name');
-  assert.ok(cohort.computeCohort('victim').exercises.every(x => /^\d{4}$/.test(x.id)), 'and the sheet shows the same');
+  assert.ok((await cohort.computeCohort('victim')).exercises.every(x => /^\d{4}$/.test(x.id)), 'and the sheet shows the same');
   for (const kind of ['review', 'debrief']) {
     const json = JSON.stringify(payload.build(victim, { handle: 'h'.repeat(16), kind, cohort: room }));
     assert.ok(!json.includes('IGNORE ALL PREVIOUS'), kind + ': the made-up id never reaches the prompt');
