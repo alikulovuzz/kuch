@@ -105,7 +105,8 @@ test('the instance count is not bounded by the length of the job log', async () 
 
 /* ---------- scheduled reviews ---------- */
 
-/** startCadence arms a setInterval; take the callback so the tests can tick it by hand. */
+/** startCadence arms a setInterval; take the callback so the tests can tick it by hand, and await
+ *  the pass it runs. */
 function captureTick(deps) {
   const real = globalThis.setInterval;
   let fn = null;
@@ -123,16 +124,16 @@ test('a scheduled review reads a batch of workouts once, not once per tick', asy
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
   process.env.FIXTURE_MODE = 'nochange';
   try {
-    tick();
+    await tick();
     assert.ok(jobs.status(uid).job, 'the first tick queues a review');
-    tick();
+    await tick();
     await settle(uid);
     assert.equal(lastOutcome(uid).outcome, 'nochange');
     assert.equal(lastOutcome(uid).trigger, 'scheduled');
 
     // The phone never opened, so lastReview in the synced state is still unset — and the same
     // workout must not be reviewed again on every tick until the daily cap is gone.
-    tick(); tick(); tick();
+    await tick(); await tick(); await tick();
     assert.equal(jobs.status(uid).job, null);
     assert.equal(jobs.readUser(uid).history.length, 1);
     assert.equal(jobs.capState(uid).used, 1);
@@ -140,7 +141,7 @@ test('a scheduled review reads a batch of workouts once, not once per tick', asy
     // A new workout is new news.
     S.workouts.push(newWorkout('w2'));
     await writeState(DIR, uid, S);
-    tick();
+    await tick();
     assert.ok(jobs.status(uid).job, 'a fresh workout is due');
     await settle(uid);
     assert.equal(jobs.readUser(uid).history.length, 2);
@@ -160,10 +161,10 @@ test('a workout the phone dated tomorrow is not re-read once the review has cove
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
   process.env.FIXTURE_MODE = 'nochange';
   try {
-    tick();
+    await tick();
     await settle(uid);
     assert.equal(lastOutcome(uid).outcome, 'nochange');
-    tick();
+    await tick();
     assert.equal(jobs.status(uid).job, null, 'the review already read that workout, whatever date the phone gave it');
     assert.equal(jobs.readUser(uid).history.length, 1);
   } finally {
@@ -178,11 +179,11 @@ test('an answer the model was paid for counts as the review, even when it was un
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
   process.env.FIXTURE_MODE = 'invalid';
   try {
-    tick();
+    await tick();
     await settle(uid);
     assert.equal(lastOutcome(uid).outcome, 'failed');
     assert.equal(lastOutcome(uid).errorClass, 'unusable');
-    tick();
+    await tick();
     assert.equal(jobs.status(uid).job, null, 'the model read those workouts; sending them again pays twice for the same data');
     assert.equal(jobs.capState(uid).used, 1);
 
@@ -190,10 +191,10 @@ test('an answer the model was paid for counts as the review, even when it was un
     process.env.FIXTURE_MODE = 'crash';
     S.workouts.push(newWorkout('w2'));
     await writeState(DIR, uid, S);
-    tick();
+    await tick();
     await settle(uid);
     assert.equal(lastOutcome(uid).errorClass, 'provider');
-    tick();
+    await tick();
     assert.ok(jobs.status(uid).job, 'a provider that fell over is retried on the next tick');
     await settle(uid);
   } finally {
@@ -207,20 +208,20 @@ test('a proposal nobody has answered is not replaced by the next scheduled revie
   await writeState(DIR, uid, S);
   const tick = captureTick({ users: () => [{ id: uid }], userNow: () => ({ date: today, hhmm: '18:00', weekday: 4 }) });
 
-  tick();
+  await tick();
   const first = await settle(uid);
   assert.equal(lastOutcome(uid).outcome, 'ready');
   assert.ok(first.pending, 'a proposal is waiting');
 
   S.workouts.push(newWorkout('w2'));
   await writeState(DIR, uid, S);
-  tick();
+  await tick();
   assert.equal(jobs.status(uid).job, null, 'not while the proposal is unread');
   assert.equal(jobs.status(uid).pending.id, first.pending.id, 'the unread proposal is still the same one');
 
   // Once it is answered, the workout logged since is due.
   jobs.resolvePending(uid, { dismissed: true });
-  tick();
+  await tick();
   assert.ok(jobs.status(uid).job, 'the workout since the last review is due');
   await settle(uid);
   assert.equal(jobs.readUser(uid).history.filter(h => h.outcome === 'ready').length, 2);

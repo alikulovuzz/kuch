@@ -133,11 +133,9 @@ export function startCadence(deps) {
     }
   }
   // One pass at a time: a pass that outlasts the tick (a slow store) is not joined by another.
+  // The callback hands back the pass it is running, for a test that ticks by hand to await.
   let running = null;
-  const timer = setInterval(() => {
-    if (running) return;
-    running = pass().finally(() => { running = null; });
-  }, TICK_MS);
+  const timer = setInterval(() => (running ||= pass().finally(() => { running = null; })), TICK_MS);
   timer.unref();
   return timer;
 }
