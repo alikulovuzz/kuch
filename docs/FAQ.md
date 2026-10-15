@@ -104,6 +104,5 @@ fork of openGym, under the fork permission in [NOTICE.md](../NOTICE.md). The exe
 
 ### Where do I ask something that isn't here?
 
-The [Discord](https://discord.gg/e62jY6fwVb) for a quick answer,
-[Discussions](https://github.com/alikulovuzz/kuch/discussions) if the next person should be
-able to find it, [Issues](https://github.com/alikulovuzz/kuch/issues) for a bug.
+[Discussions](https://github.com/alikulovuzz/kuch/discussions) for a question,
+[Issues](https://github.com/alikulovuzz/kuch/issues) for a bug.

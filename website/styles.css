@@ -159,8 +159,8 @@ nav {
   transition: color .2s var(--ease);
 }
 .nav-quick .ql:hover { color: var(--fg); text-decoration: none; }
-.nav-quick .ql [data-gh], .nav-quick .ql [data-dc] { font-variant-numeric: tabular-nums; color: var(--fg-3); }
-.nav-quick .ql:hover [data-gh], .nav-quick .ql:hover [data-dc] { color: var(--fg-2); }
+.nav-quick .ql [data-gh] { font-variant-numeric: tabular-nums; color: var(--fg-3); }
+.nav-quick .ql:hover [data-gh] { color: var(--fg-2); }
 .nav-quick .cta {
   color: var(--acc-ink); background: var(--acc); font-weight: 600; font-size: 14px;
   padding: 7px 15px; border-radius: 999px;
@@ -241,8 +241,8 @@ body.menu-open .navsheet {
 .navsheet .nl:last-of-type { border-bottom: 0; }
 .navsheet .nl:hover { text-decoration: none; background: rgba(255, 255, 255, .05); }
 .navsheet .nl[aria-current="page"] { color: var(--acc); }
-.navsheet .nl [data-gh], .navsheet .nl [data-dc] { color: var(--fg-3); font-size: 14px; font-variant-numeric: tabular-nums; }
-/* The cup sits where the star count and the member count sit: hard right, in the
+.navsheet .nl [data-gh] { color: var(--fg-3); font-size: 14px; font-variant-numeric: tabular-nums; }
+/* The cup sits where the star count sits: hard right, in the
    same quiet grey — the row reads "Buy me a coffee ……… ☕". */
 .navsheet .coffee svg { width: 19px; height: 19px; fill: var(--fg-3); flex: none; }
 /* No second Download button in here: the bar keeps its own at every width, a
@@ -648,7 +648,6 @@ section { padding: var(--sec) 0 0; }
   background: color-mix(in srgb, var(--brand) 16%, transparent);
 }
 .pad-ic svg { width: 22px; height: 22px; fill: var(--brand); }
-.pad.discord .pad-ic svg { width: 24px; height: 19px; }
 .pad-body { display: block; flex: 1 1 auto; }
 .pad-body b {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -672,7 +671,6 @@ section { padding: var(--sec) 0 0; }
 .pad.github  { --brand: var(--fg); }
 .pad.gitlab  { --brand: #fc6d26; }
 .pad.bmc     { --brand: #ffdd00; }
-.pad.discord { --brand: #5865f2; }
 .pad.dead .pad-go::after { display: none; }
 /* The support card holds two destinations, so it is a box with two links instead of one
    big link; each link carries its own brand colour. */
@@ -693,7 +691,6 @@ section { padding: var(--sec) 0 0; }
   .pad { padding: 18px; }
   .pad-ic { width: 38px; height: 38px; border-radius: 11px; margin-bottom: 13px; }
   .pad-ic svg { width: 19px; height: 19px; }
-  .pad.discord .pad-ic svg { width: 21px; height: 16px; }
   .pad-body > span { font-size: 13px; }
   /* Two cards to a row leaves ~160px of column: the second sentence would run to
      seven lines. The identity and the destination survive; the detail does not. */

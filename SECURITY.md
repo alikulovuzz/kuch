@@ -23,23 +23,19 @@ Use GitHub's private vulnerability reporting:
 you and the maintainer, and it becomes the advisory thread where the fix is discussed and, once
 released, published.
 
-If you can't use GitHub, ask for an e-mail address on the
-[Discord](https://discord.gg/e62jY6fwVb) without giving any details, and you'll get one back within
-a couple of days.
-
-Please don't put a working exploit in a public issue if it can be used against other people's
-instances, and not in the Discord either, which is a public room. Everything else (a crash you can
-only trigger on your own box, a scanner warning) is fine as a normal issue.
+Please don't put a working exploit in a public issue or discussion if it can be used against other
+people's instances. Everything else (a crash you can only trigger on your own box, a scanner
+warning) is fine as a normal issue.
 
 Useful in a report: the version or commit, whether you're running the prebuilt images or a
 source build, your `RP_ID`/`ORIGIN` and what sits in front of the app, steps to reproduce, and
 what an attacker gets out of it.
 
-**On response times:** this is a hobby project maintained by one person alongside school. There
-is no SLA and no bounty. Expect days rather than hours, and longer during exam periods. If a
-week goes by with no reply, comment on the advisory thread — it's more likely to be a missed
-notification than a decision. If a report goes unfixed and you want to disclose publicly, say so
-in the thread; there's no objection, and no request to sit on it indefinitely.
+**On response times:** Kuch is a non-commercial fork maintained by one person. There is no SLA
+and no bounty. Expect days rather than hours. If a week goes by with no reply, comment on the
+advisory thread; it's more likely to be a missed notification than a decision. If a report goes
+unfixed and you want to disclose publicly, say so in the thread; there's no objection, and no
+request to sit on it indefinitely.
 
 ## In scope
 

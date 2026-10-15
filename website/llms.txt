@@ -20,4 +20,4 @@
 
 ## Source & community
 - [GitHub repository](https://github.com/alikulovuzz/kuch): code, issues, pull requests, releases
-- [Discord](https://discord.gg/e62jY6fwVb): release announcements and self-hosting help
+- [Discussions](https://github.com/alikulovuzz/kuch/discussions): questions, ideas and self-hosting help

@@ -514,7 +514,6 @@ const html = `<!DOCTYPE html>
     <a class="ql site" href="/api.html">API</a>
     <a class="ql site" href="/about.html">About</a>
     <a class="ql" href="https://github.com/alikulovuzz/kuch" rel="noopener">GitHub <span data-gh="stars"></span></a>
-    <a class="ql" href="https://discord.gg/e62jY6fwVb" rel="noopener">Discord <span data-dc="members"></span></a>
     <a class="cta" href="/#download">Download</a>
   </div>
   <button class="nav-toggle" id="navtoggle" aria-expanded="false" aria-controls="sitemenu" aria-label="Menu">
@@ -534,7 +533,6 @@ const html = `<!DOCTYPE html>
     <a class="nl" href="/api.html">API</a>
     <a class="nl" href="/about.html">About</a>
     <a class="nl" href="https://github.com/alikulovuzz/kuch" rel="noopener">GitHub <span data-gh="stars"></span></a>
-    <a class="nl" href="https://discord.gg/e62jY6fwVb" rel="noopener">Discord <span data-dc="members"></span></a>
   </div>
 </div>
 
@@ -614,7 +612,6 @@ ${schemaCards}
     <a href="docs.html">Docs</a>
     <a href="about.html">About</a>
     <a href="https://github.com/alikulovuzz/kuch" rel="noopener">GitHub</a>
-    <a href="https://discord.gg/e62jY6fwVb" rel="noopener">Discord</a>
     <a href="/#download">Download</a>
   </div>
 </div></footer>
