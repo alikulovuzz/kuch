@@ -180,6 +180,19 @@ describe('check-locale-merge.mjs', { timeout: 30_000 }, () => {
     expect(r.out).toContain('"Salvar"')
   })
 
+  it('compares a plural entry by its forms, not the order they are written in', () => {
+    const plural = { one: '{0} подход', few: '{0} подхода', many: '{0} подходов' }
+    const reordered = { many: plural.many, one: plural.one, few: plural.few }
+    const r = run({
+      base: { ru: { '{0} sets': plural } },
+      fork: { ru: { '{0} sets': reordered } },
+      upstream: { ru: { '{0} sets': plural } },
+      merged: { ru: { '{0} sets': plural } },
+    })
+    expect(r.out).not.toContain('"{0} sets"')
+    expect(r.code).toBe(0)
+  })
+
   it('reports no false revert when one side committed the pack with CRLF line endings', () => {
     // The whole file differs byte for byte, the multi-line template literal included; the strings
     // it defines do not, so nothing may be reported.

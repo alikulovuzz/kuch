@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// Catches translations an upstream sync merge silently reverted. check-locales cannot: after a
-// conflict resolution that took upstream's side, every key is still there, translated, with its
-// placeholders. That is how the v1.4.1 merge put 56 fr/pl/ru strings back to upstream's wording.
+// Catches translations an upstream sync merge silently reverted: the fork had changed a string,
+// and the conflict resolution took upstream's side. check-locales cannot see it, since every key
+// is still there, translated, with its placeholders. (The v1.4.1 incident, 56 fr/pl/ru strings,
+// was the mirror image: the merge kept the fork's rebranded line and lost upstream's
+// retranslation. The rules below leave that case silent; see #69.)
 //
 //   node scripts/check-locale-merge.mjs [<merge-commit>]     (default HEAD)
 //
@@ -39,9 +41,11 @@ const gitText = args => {
   const r = git(args)
   return r.status === 0 ? r.stdout.toString('utf8').trim() : null
 }
+const short = sha => sha.slice(0, 9)
 
 const args = process.argv.slice(2)
-if (args.length > 1 || args[0]?.startsWith('-')) usage(args[0] === '-h' || args[0] === '--help' ? 'Checks one sync merge commit for reverted translations.' : `unexpected arguments: ${args.join(' ')}`)
+if (args[0] === '-h' || args[0] === '--help') usage('Checks one sync merge commit for reverted translations.')
+if (args.length > 1 || args[0]?.startsWith('-')) usage(`unexpected arguments: ${args.join(' ')}`)
 const rev = args[0] ?? 'HEAD'
 
 // The packs sit at ../src/locales from this script. As a path from the top of the repo, so that
@@ -57,7 +61,7 @@ if (parents.length !== 2)
   usage(`${rev} has ${parents.length} parent${parents.length === 1 ? '' : 's'}; this check needs a merge commit with exactly two (fork first, upstream second).`)
 const [ours, theirs] = parents
 const base = gitText(['merge-base', ours, theirs])
-if (!base) usage(`${ours.slice(0, 9)} and ${theirs.slice(0, 9)} have no merge base.`)
+if (!base) usage(`${short(ours)} and ${short(theirs)} have no merge base.`)
 
 const commits = { base, ours, theirs, merged: merge }
 
@@ -112,7 +116,7 @@ try {
         if (!dict || typeof dict !== 'object') throw new Error('no default-exported object')
         packs[role].set(file, dict)
       } catch (e) {
-        broken.push(`${file} at ${role} (${commits[role].slice(0, 9)}): ${e.message}`)
+        broken.push(`${file} at ${role} (${short(commits[role])}): ${e.message}`)
       }
     }
   }
@@ -124,9 +128,12 @@ if (broken.length) {
 }
 
 // Absent is a value of its own, distinct from every string. Plural entries are objects, compared
-// by content.
-const enc = v => (v === undefined ? undefined : JSON.stringify(v))
-const show = v => (v === undefined ? '(absent)' : JSON.stringify(v))
+// by content with their forms in a fixed order.
+const show = v => (v === undefined ? '(absent)' : JSON.stringify(v, v && typeof v === 'object' ? Object.keys(v).sort() : undefined))
+
+const LOST = { label: 'fork change lost', fails: true }
+const UNDONE = { label: 'fork deletion undone', fails: true }
+const HAND = { label: 'hand-resolved (info)', fails: false }
 
 const files = [...new Set(Object.values(listing).flatMap(m => [...m.keys()]))].sort()
 let lost = 0
@@ -138,22 +145,22 @@ for (const file of files) {
   const lines = []
   for (const k of keys) {
     const [b, o, t, m] = [B, O, T, M].map(d => (Object.hasOwn(d, k) ? d[k] : undefined))
-    const [eb, eo, et, em] = [b, o, t, m].map(enc)
+    // show() is also the comparison key: JSON keeps every string apart from (absent).
+    const [eb, eo, et, em] = [b, o, t, m].map(show)
     let kind = null
-    if (b !== undefined && o === undefined && m !== undefined) kind = 'fork deletion undone'
-    else if (eo !== eb && em === et && em !== eo) kind = 'fork change lost'
-    else if (em !== eo && em !== et && eo !== et) kind = 'hand-resolved (info)'
+    if (b !== undefined && o === undefined && m !== undefined) kind = UNDONE
+    else if (eo !== eb && em === et && em !== eo) kind = LOST
+    else if (em !== eo && em !== et && eo !== et) kind = HAND
     if (!kind) continue
-    if (kind.endsWith('(info)')) info++
-    else lost++
-    lines.push(`  ${kind}: ${JSON.stringify(k)}`, `      fork:     ${show(o)}`)
-    if (kind.endsWith('(info)')) lines.push(`      upstream: ${show(t)}`)
-    lines.push(`      merged:   ${show(m)}`)
+    if (kind.fails) lost++
+    else info++
+    lines.push(`  ${kind.label}: ${JSON.stringify(k)}`, `      fork:     ${eo}`)
+    if (!kind.fails) lines.push(`      upstream: ${et}`)
+    lines.push(`      merged:   ${em}`)
   }
   if (lines.length) report.push(`\n${file.replace(/\.js$/, '')}`, ...lines)
 }
 
-const short = sha => sha.slice(0, 9)
 console.log(`merge ${short(merge)}: fork ${short(ours)}, upstream ${short(theirs)}, base ${short(base)}; ${files.length} locale packs`)
 if (report.length) console.log(report.join('\n'))
 

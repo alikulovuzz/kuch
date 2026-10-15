@@ -84,9 +84,15 @@ jobs:
       - name: locale merge check, every merge commit on the sync branch
         if: startsWith(github.head_ref || github.ref_name, 'sync/')
         working-directory: frontend
+        # --first-parent: the sync merge brings upstream's history in through its second parent,
+        # and upstream's own merges in there are not fork-vs-upstream merges. A sync branch
+        # always carries at least one merge, so finding none means something is off: fail.
         run: |
+          git rev-parse --verify --quiet origin/main >/dev/null || { echo "origin/main was not fetched"; exit 1; }
+          merges=$(git rev-list --first-parent --merges --max-parents=2 origin/main..HEAD)
+          test -n "$merges" || { echo "No merge commit on this sync branch to check."; exit 1; }
           status=0
-          for c in $(git rev-list --merges --max-parents=2 origin/main..HEAD); do
+          for c in $merges; do
             node scripts/check-locale-merge.mjs "$c" || status=1
           done
           exit $status
