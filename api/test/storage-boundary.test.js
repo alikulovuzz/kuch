@@ -26,8 +26,12 @@
      `=> (store.readState(u))`, `Promise.all([store.readState(a), …])` and
      `const p = store.saveDb(db); await p;` are reported although they wait; write them as a
      plain `await` (or mark them). `await saveDb().then(…)` passes, since the chain is awaited.
-   - Regular-expression literals are told from division by the token before the `/`; a `/` after
-     `)` or `]` is division. A regex there would be read as code up to the next `/`.
+   - Regular-expression literals are told from division by the token before the `/`: after a name,
+     a literal, `)`, `]` or `x++` it is division. A regex there would be read as code up to the
+     next `/`.
+   - A comment counts as a marker when `storage-boundary-allow` is followed by a rule name, a colon
+     or nothing; followed by any other word it is prose about the marker. A marker naming an unused
+     rule, or on a line with no violation, passes silently.
    - A training-document name built some other way (from parts kept in variables) is not seen.
    - Only .js/.mjs under api/ count; the store itself, the tests and the JSON-to-Postgres migration
      script (which reads the files on purpose) are out of scope, and so is the MCP server, which
@@ -51,7 +55,7 @@ function modules(dir = API) {
   });
 }
 
-const rules = src => scan(src).map(v => [v.line, v.rule]);
+const verdicts = src => scan(src).map(v => [v.line, v.rule]);
 
 test('every API module outside the store keeps to the storage boundary', () => {
   const files = modules().map(f => path.relative(API, f).split(path.sep).join('/'));
@@ -63,16 +67,19 @@ test('every API module outside the store keeps to the storage boundary', () => {
 });
 
 test('direct storage access: the account database or a training-document name in code', () => {
-  assert.deepEqual(rules(`const x = 1;\nconst f = path.join(DATA, 'db.json');\n`), [[2, 'direct-storage-access']]);
-  assert.deepEqual(rules(`fs.copyFileSync(dbFile, "db.json.bak");`), [[1, 'direct-storage-access']]);
-  assert.deepEqual(rules('\n\nconst f = path.join(DATA, `state-${uid}.json`);'), [[3, 'direct-storage-access']]);
-  assert.deepEqual(rules(`const f = path.join(DATA, 'state-' + uid + '.json');`), [[1, 'direct-storage-access']]);
-  assert.deepEqual(rules(`const uids = fs.readdirSync(DATA).filter(f => f.startsWith('state-'));`), [[1, 'direct-storage-access']]);
-  assert.deepEqual(rules(`const m = /^state-(.+)\\.json$/.exec(name);`), [[1, 'direct-storage-access']]);
+  assert.deepEqual(verdicts(`const x = 1;\nconst f = path.join(DATA, 'db.json');\n`), [[2, 'direct-storage-access']]);
+  assert.deepEqual(verdicts(`fs.copyFileSync(dbFile, "db.json.bak");`), [[1, 'direct-storage-access']]);
+  assert.deepEqual(verdicts('\n\nconst f = path.join(DATA, `state-${uid}.json`);'), [[3, 'direct-storage-access']]);
+  assert.deepEqual(verdicts(`const f = path.join(DATA, 'state-' + uid + '.json');`), [[1, 'direct-storage-access']]);
+  assert.deepEqual(verdicts(`const uids = fs.readdirSync(DATA).filter(f => f.startsWith('state-'));`), [[1, 'direct-storage-access']]);
+  assert.deepEqual(verdicts(`const m = /^state-(.+)\\.json$/.exec(name);`), [[1, 'direct-storage-access']]);
+  assert.deepEqual(verdicts(`const uids = names.filter(f => /^state-/.test(f));`), [[1, 'direct-storage-access']]);
+  // A `state-` word and some other `.json` on the same line are not a name being built.
+  assert.deepEqual(verdicts(`log('state-machine reset'); return res.json(S);`), []);
 });
 
 test('the files that stay files under ADR 0001 are not storage access', () => {
-  assert.deepEqual(rules([
+  assert.deepEqual(verdicts([
     `const secretFile = path.join(DATA, 'secret');`,
     `const vapid = path.join(DATA, 'vapid.json'), coach = path.join(DATA, 'coach.json');`,
     "const auth = path.join(DATA, 'coach', `coach-auth-${uid}`);",
@@ -82,18 +89,23 @@ test('the files that stay files under ADR 0001 are not storage access', () => {
 });
 
 test('unawaited store call: a bare statement, a wrapper, a fire-and-forget chain', () => {
-  assert.deepEqual(rules(`db.users.push(u);\nstore.saveDb(db);\nsend(res, 200);`), [[2, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`function f() {\n  user.name = n;\n  saveDb();\n}`), [[3, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`store.readState(uid).then(S => send(res, 200, S));`), [[1, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`saveDb().then(() => log('saved'));`), [[1, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`const S = jobs.readState(user.id);`), [[1, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`for (const uid of listUserIds()) count++;`), [[1, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`const ok = store.casWriteState(uid, 1, null, doc);\nconst h = store.health();`), [[1, 'unawaited-store-call'], [2, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`void store.deleteState(uid);`), [[1, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`db.users.push(u);\nstore.saveDb(db);\nsend(res, 200);`), [[2, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`function f() {\n  user.name = n;\n  saveDb();\n}`), [[3, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`store.readState(uid).then(S => send(res, 200, S));`), [[1, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`saveDb().then(() => log('saved'));`), [[1, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`const S = jobs.readState(user.id);`), [[1, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`for (const uid of listUserIds()) count++;`), [[1, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`const ok = store.casWriteState(uid, 1, null, doc);\nconst h = store.health();`), [[1, 'unawaited-store-call'], [2, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`void store.deleteState(uid);`), [[1, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`const S = coachJobs.readState(uid);`), [[1, 'unawaited-store-call']]);
+  // A call followed by a block on the next line is still a call, not a method being declared.
+  assert.deepEqual(verdicts(`saveDb()\n{ send(res, 200); }`), [[1, 'unawaited-store-call']]);
+  // A same-named method on something else is not the wrapper.
+  assert.deepEqual(verdicts(`queue[0].saveDb(); this.cache.readState(uid);`), []);
 });
 
 test('awaited, returned or an arrow expression body is fine', () => {
-  assert.deepEqual(rules([
+  assert.deepEqual(verdicts([
     `db = await store.loadDb();`,
     `await saveDb();`,
     `if (proof === 'passkey') await saveDb();`,
@@ -114,7 +126,7 @@ test('awaited, returned or an arrow expression body is fine', () => {
 });
 
 test('the same names inside comments, strings and regular expressions are not code', () => {
-  assert.deepEqual(rules([
+  assert.deepEqual(verdicts([
     `// db.json and state-<uid>.json are the store's: store.saveDb(db) persists them`,
     `/* saveDb(); store.readState(uid); path.join(DATA, \`state-\${uid}.json\`) */`,
     `/**`,
@@ -125,25 +137,30 @@ test('the same names inside comments, strings and regular expressions are not co
     'const msg = `saved: ${await store.readStateRev(uid)}`;'
   ].join('\n')), []);
   // And code after them is still code.
-  assert.deepEqual(rules([
+  assert.deepEqual(verdicts([
     `const u = 'http://x/y'; store.saveDb(db);`,
     `const r = /a\\/b/g; saveDb();`,
     'const t = `${n} // not a comment`; saveDb();',
-    `x = a / b; saveDb(); // ok`
-  ].join('\n')), [[1, 'unawaited-store-call'], [2, 'unawaited-store-call'], [3, 'unawaited-store-call'], [4, 'unawaited-store-call']]);
+    `x = a / b; saveDb(); // ok`,
+    `const avg = total++ / n; store.saveDb(db);`,
+    `const d = (a - b) / 2; saveDb();`
+  ].join('\n')), [1, 2, 3, 4, 5, 6].map(line => [line, 'unawaited-store-call']));
 });
 
 test('an exemption marker with a reason allows its line; one without a reason is a violation', () => {
-  assert.deepEqual(rules(`['secret', 'db.json'].forEach(lock); // storage-boundary-allow direct-storage-access: chmod only`), []);
-  assert.deepEqual(rules(`saveDb(); /* storage-boundary-allow unawaited-store-call — fire and forget on shutdown */`), []);
+  assert.deepEqual(verdicts(`['secret', 'db.json'].forEach(lock); // storage-boundary-allow direct-storage-access: chmod only`), []);
+  assert.deepEqual(verdicts(`saveDb(); /* storage-boundary-allow unawaited-store-call — fire and forget on shutdown */`), []);
   // Only for the rule it names, and only on its own line.
-  assert.deepEqual(rules(`saveDb(); // storage-boundary-allow direct-storage-access: chmod only`), [[1, 'unawaited-store-call']]);
-  assert.deepEqual(rules(`// storage-boundary-allow unawaited-store-call: the next line\nsaveDb();`), [[2, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`saveDb(); // storage-boundary-allow direct-storage-access: chmod only`), [[1, 'unawaited-store-call']]);
+  assert.deepEqual(verdicts(`// storage-boundary-allow unawaited-store-call: the next line\nsaveDb();`), [[2, 'unawaited-store-call']]);
   // No reason: the marker is reported, and allows nothing.
-  assert.deepEqual(rules(`\nsaveDb(); // storage-boundary-allow unawaited-store-call`), [[2, 'unawaited-store-call'], [2, 'exemption-without-reason']]);
-  assert.deepEqual(rules(`saveDb(); // storage-boundary-allow unawaited-store-call: `), [[1, 'unawaited-store-call'], [1, 'exemption-without-reason']]);
+  assert.deepEqual(verdicts(`\nsaveDb(); // storage-boundary-allow unawaited-store-call`), [[2, 'unawaited-store-call'], [2, 'exemption-without-reason']]);
+  assert.deepEqual(verdicts(`saveDb(); // storage-boundary-allow unawaited-store-call: `), [[1, 'unawaited-store-call'], [1, 'exemption-without-reason']]);
   // A marker that names no rule is not an exemption either.
-  assert.deepEqual(rules(`saveDb(); // storage-boundary-allow: it is fine`), [[1, 'unawaited-store-call'], [1, 'exemption-without-reason']]);
+  assert.deepEqual(verdicts(`saveDb(); // storage-boundary-allow: it is fine`), [[1, 'unawaited-store-call'], [1, 'exemption-without-reason']]);
+  assert.deepEqual(verdicts(`saveDb(); // storage-boundary-allow`), [[1, 'unawaited-store-call'], [1, 'exemption-without-reason']]);
+  // Prose about the marker is not a marker.
+  assert.deepEqual(verdicts(`// to exempt a line, add a storage-boundary-allow comment naming the rule`), []);
 });
 
 test('a violation names its line and carries the source line', () => {

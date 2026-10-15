@@ -109,7 +109,7 @@ fs.mkdirSync(DATA, { recursive: true });
  * reason to refuse to boot. The privilege drop in adapters/spawn.js is the control that does
  * fail closed. */
 const lock = f => { try { fs.chmodSync(path.join(DATA, f), 0o600); } catch { /* not present yet, or host says no */ } };
-['secret', 'db.json', 'coach.json'].forEach(lock); // storage-boundary-allow direct-storage-access: chmod only, never a read or write; it also covers a db.json left behind after a move to Postgres
+['secret', 'db.json', 'coach.json'].forEach(lock); // storage-boundary-allow direct-storage-access: chmod only, also of a db.json left after a move to Postgres
 
 /* ---------- secret + db ---------- */
 const secretFile = path.join(DATA, 'secret');
