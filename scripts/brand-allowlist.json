@@ -1,0 +1,127 @@
+[
+  {
+    "path": "{scripts/check-brand.mjs,scripts/brand-allowlist.json,frontend/scripts/check-brand.test.mjs}",
+    "reason": "The brand check itself: the script, this allowlist and their tests spell out the terms they search for."
+  },
+  {
+    "path": "CHANGELOG.md",
+    "reason": "History: upstream's release notes up to the fork, kept verbatim (Phase 1 inventory, #6)."
+  },
+  {
+    "path": "ROADMAP.md",
+    "reason": "History: upstream's roadmap and milestones, kept as they were (Phase 1 inventory, #6)."
+  },
+  {
+    "path": "NOTICE.md",
+    "reason": "Licence attribution: upstream's copyright and AGPL notice, the app-store clause, the catalogue attribution and the media licence, verbatim."
+  },
+  {
+    "path": "catalogue/media/NOTICE.md",
+    "reason": "The media notice: Gym visual's licence to openGym, quoted verbatim, and the fork permission Kuch carries the media under (#52, #54)."
+  },
+  {
+    "path": "**",
+    "match": "fork of (<a href=\"https://github\\.com/DuarteSantos8/openGym\" rel=\"noopener\">openGym</a>|\\[openGym\\]\\(https://github\\.com/DuarteSantos8/openGym\\)|openGym)",
+    "reason": "Attribution: Kuch names openGym, with a link to it, as the project it is forked from (AGPL)."
+  },
+  {
+    "path": "README.md",
+    "match": "\\[openGym\\]\\(https://github\\.com/DuarteSantos8/openGym\\) by Duarte Santos|is openGym's history|on openGym's GitLab mirror|keeps openGym's|is openGym's and open to contributions",
+    "reason": "Attribution in the README: the changelog note (upstream's history and merge requests) and the licence section."
+  },
+  {
+    "path": "**",
+    "match": "[Ii]nherited from openGym",
+    "reason": "Attribution: the static website is upstream's, inherited and not deployed by the fork."
+  },
+  {
+    "path": "**",
+    "match": "upstream openGym",
+    "reason": "Names upstream as upstream: compatibility notes for configs and backups made by the project Kuch syncs from."
+  },
+  {
+    "path": "**",
+    "match": "[Ll]icensed (to|(from Gym visual )?for( use in)?) openGym|use in openGym only|openGym's app packages|Gym visual</a> for openGym|by openGym's license\\. Anything outside openGym needs|openGym's notice allows",
+    "reason": "Media licence: the exercise stills and clips are licensed to openGym by Gym visual. Gym visual's quote and every line stating that licence stay verbatim (#54)."
+  },
+  {
+    "path": "website/{about,index}.html",
+    "match": "The story and milestones below are openGym's, told by its author|openGym (was not planned as a product|still runs on the same homelab)|I build openGym with|<a href=\"https://duarte-santos\\.ch\" rel=\"noopener\">Duarte Santos</a>|https://github\\.com/DuarteSantos8/openGym/releases|\"url\":\"https://duarte-santos\\.ch\"|<blockquote>openGym started as|who wrote openGym, the app Kuch is forked from",
+    "reason": "Attribution: the About story and the homepage quote are upstream's author's own words, kept under a Kuch preface, with the author's links and JSON-LD credit."
+  },
+  {
+    "path": "{frontend/src/sheets.jsx,.github/ISSUE_TEMPLATE/exercise.yml,catalogue/README.md}",
+    "match": "https://github\\.com/DuarteSantos8/openGym/(issues/new\\?template=exercise\\.yml|blob/main/catalogue/README\\.md)",
+    "reason": "Upstream exercise-report links: the owner chose to keep sending catalogue reports to upstream's tracker (#53, call 3)."
+  },
+  {
+    "path": "{catalogue/exercises/*.json,scripts/catalogue/import-drafts.mjs}",
+    "match": "\"?textSource\"?: [\"']opengym[\"']",
+    "reason": "\"textSource\": \"opengym\" is a licence-provenance marker (AGPL text written for openGym, as opposed to MIT ExerciseDB text), kept (#53, call 1)."
+  },
+  {
+    "path": "api/coach/config.js",
+    "match": "'opengym-coach-v1'",
+    "reason": "Never-change name: the HKDF label for the Coach's encrypted keys. Renaming it makes every stored key unreadable."
+  },
+  {
+    "path": "api/device-link.js",
+    "match": "'opengym-link:'",
+    "reason": "Never-change name: the salt of a device-link code's hash. Renaming it voids every pending code."
+  },
+  {
+    "path": "api/password.js",
+    "match": "'opengym-reset:'",
+    "reason": "Never-change name: the salt of a password-reset code's hash. Renaming it voids every pending code."
+  },
+  {
+    "path": "**",
+    "match": "opengym_plan",
+    "reason": "Never-change name: the marker field of a plan file and a Coach plan bundle. Renaming it breaks import of every plan already shared."
+  },
+  {
+    "path": "**",
+    "match": "opengym-backup[\\w.*<>-]*",
+    "reason": "Never-change name: opengym-backup.json, the data entry in a backup zip, plus the pre-fork opengym-backup-<date> export names that still import and the backup-folder file."
+  },
+  {
+    "path": "**",
+    "match": "opengym-(state|state-owner|remote|stash|coach)\\.json|opengym-media(-v1|-sync)?|opengym-rt-|opengym-device(-id)?|openGymSheet|opengym-ios/",
+    "reason": "Kept on-device keys: files, caches, IndexedDB names, locks and history state already on phones and browsers. Renaming orphans that data (Phase 1 inventory, category 5)."
+  },
+  {
+    "path": "**",
+    "match": "opengym-(w|bw)-|opengym-health\\.json",
+    "reason": "Kept on-device keys: the Health Connect record ids the app replaces and removes its own records by, and the file of what it wrote (#53, call 2)."
+  },
+  {
+    "path": "frontend/src/lib/{api,api.pair-probe.test}.js",
+    "match": "'(not-)?opengym'",
+    "reason": "Internal result codes of the server probe; never shown to users."
+  },
+  {
+    "path": "frontend/public/sw.js",
+    "match": "\\|\\| 'opengym'",
+    "reason": "Internal fallback tag of a push notification; never shown to users."
+  },
+  {
+    "path": "mcp/**",
+    "match": "OPENGYM_(DATA|UID|\\*)",
+    "reason": "Backward-compatible MCP env: KUCH_* first, upstream's OPENGYM_* names still read, so existing client configs keep working."
+  },
+  {
+    "path": "api/{password.js,test/password.test.js}",
+    "match": "'(opengym|opengym123|opengym1234|OpenGym2026!)'",
+    "reason": "Password deny-list: the old brand stays a refused guess."
+  },
+  {
+    "path": "frontend/src/**/*.test.jsx",
+    "match": "https://opengym\\.test/|https://x/opengym\\.apk",
+    "reason": "Test fixtures: placeholder URLs that never resolve."
+  },
+  {
+    "path": "assets/banner.svg",
+    "match": "aria-label=\"openGym — ",
+    "reason": "Owner's follow-up: the banner image itself still says openGym, and its label changes with the image."
+  }
+]
