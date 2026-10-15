@@ -79,7 +79,7 @@ test('an unwritable ./data cannot take the process down through the rest timer n
 
   assert.equal(h.exited, null, `the api exited on a failed prune save:\n${h.log}`);
   assert.equal((await fetch(`${h.api}/api/health`)).status, 200, 'still serving');
-  assert.match(h.log, /push: could not save db.json/, 'and it said so, once, without a stack');
+  assert.match(h.log, /push: could not save the pruned subscriptions/, 'and it said so, once, without a stack');
 });
 
 test('a push that was delivered is a 200 even when only the prune save failed', { skip }, async t => {

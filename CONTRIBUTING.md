@@ -74,7 +74,9 @@ it in review.
 </picture>
 </p>
 
-A pull request runs the three test suites and builds and boots both api image targets. The APK and
+A pull request runs the three test suites and builds and boots both api image targets. It also runs
+the brand check (`node scripts/check-brand.mjs`): a new upstream brand term must be renamed to Kuch,
+or added to `scripts/brand-allowlist.json` with the reason it stays. The APK and
 the published images come from GitLab CI on the mirror, built from `main` after the merge. If your
 change needs an APK to be judged, say so in the pull request and a maintainer will run that build.
 A first-time contributor's workflows wait for a maintainer to approve them, so "no checks yet"
@@ -82,6 +84,10 @@ just means nobody has pressed the button.
 
 Merge requests still open on the GitLab mirror are reviewed too and land on `main` here. New work
 should come as a GitHub pull request.
+
+Merging a new upstream release into Kuch is its own procedure, with the brand check, the locale
+merge check and both api backends at fixed points: follow
+[docs/UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md) step by step.
 
 ## Good first issues
 
