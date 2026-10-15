@@ -3,6 +3,7 @@
 #
 #   ./dev.sh                  # API on :3000, app on http://localhost:5173
 #   WEB_PORT=5174 ./dev.sh    # any of the variables below can be overridden the same way
+#   .\dev.cmd                 # from PowerShell or cmd on Windows (runs this with Git Bash)
 #
 # Ctrl+C stops both; if either one exits, the other is stopped too. Data goes to ./data, the
 # same folder docker compose uses. .env is not read: its ORIGIN is the Docker one (:8080), and
