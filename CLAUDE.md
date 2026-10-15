@@ -145,3 +145,17 @@ output), `api`, `web` (multi-stage build of `frontend/` served by nginx, which a
 - Don't commit `media/` or `data/` (gitignored).
 - Training-logic changes (progression, 1RM, session read-back) need a unit test in `src/lib`
   beside the code, not just manual clicking-through.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on `alikulovuzz/kuch` (via `gh`, always with `--repo`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
