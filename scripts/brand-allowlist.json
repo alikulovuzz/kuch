@@ -13,7 +13,8 @@
   },
   {
     "path": "docs/UPSTREAM_SYNC.md",
-    "reason": "The upstream sync runbook: it names upstream's repository (the fetch-only remote, the one never to push to) and the five never-change internal keys by their real names (#70)."
+    "match": "DuarteSantos8/openGym|opengym(-coach-v1|-link:|-reset:|_plan|-backup\\.json|-\\*|-\\.\\.\\.|\\*)|returning openGym string|text with openGym in it",
+    "reason":"The upstream sync runbook: it names upstream's repository (the fetch-only remote, the one never to push to) and the five never-change internal keys by their real names (#70)."
   },
   {
     "path": "NOTICE.md",

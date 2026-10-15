@@ -20,7 +20,7 @@ Once per clone:
 ```bash
 git remote add --no-tags upstream https://github.com/DuarteSantos8/openGym.git
 git remote set-url --push upstream no-push
-git config remote.upstream.fetch '+refs/tags/v*:refs/upstream-tags/v*'
+git config --replace-all remote.upstream.fetch '+refs/tags/v*:refs/upstream-tags/v*'
 ```
 
 - `set-url --push ... no-push`: the remote has no push URL, so any `git push upstream` fails
@@ -104,6 +104,9 @@ so they stay `opengym*` even where everything around them says Kuch:
 | `opengym-reset:` | the password-reset token prefix (`api/password.js`) |
 | `opengym_plan` | the format marker of a plan bundle, as the Coach returns it (`api/coach/core/validate.js`) |
 | `opengym-backup.json` | the data file inside a media backup zip (`frontend/src/lib/backup-media.js`) |
+
+The other kept `opengym-*` names (on-device storage keys, file names, ids) are in
+`scripts/brand-allowlist.json`, each with the reason it stays. Treat them the same way.
 
 A conflict hunk where one side says `opengym-...` and the other `kuch-...` is usually a
 **user-visible** name, and the fork's `kuch-...` side wins. A hunk that touches one of the five
@@ -214,7 +217,9 @@ branch. Name them `Sync $V: ...` so the review can tell them from the merge.
 
 ## 6. Run every suite
 
-These are the same commands as `.github/workflows/test.yml`. The PostgreSQL runs need a throwaway
+These are the same commands as the `test`, `api` and `mcp` jobs of `.github/workflows/test.yml`.
+Its `api-image` and `compose` jobs (building and booting the Docker images) run on the PR in CI.
+The PostgreSQL runs need a throwaway
 database. This one matches CI's, on port 55432 so it does not clash with a Postgres you already run:
 
 ```bash
@@ -303,11 +308,12 @@ M=$(git rev-list --first-parent --merges -1 HEAD)
 B=$(git merge-base $M^1 $M^2)
 ```
 
-**Routes upstream added in this release.** For each one, read its handler and confirm every
-account or training-document read and write goes through the store and is awaited:
+**Routes upstream added in this release.** Routes are declared in `api/server.js`,
+`api/coach/routes.js` and any module upstream adds. For each one, read its handler and confirm
+every account or training-document read and write goes through the store and is awaited:
 
 ```bash
-git diff -U0 $B $M^2 -- api/server.js | grep -E "^\+.*'(GET|POST|PUT|PATCH|DELETE) /api/"
+git diff -U0 $B $M^2 -- api ':!api/test/' ':!api/openapi.yaml' | grep -E "^\+.*'(GET|POST|PUT|PATCH|DELETE) /api/"
 ```
 
 **New file access in the API.** Upstream's new direct file reads and writes. Anything that touches
@@ -386,8 +392,10 @@ merge commit `<sha>`.
 | frontend `npm run build` | <ok> |
 | `node scripts/check-locales.mjs` | <result> |
 | `node scripts/check-source-strings.mjs` | <count, against main's> |
+| `npm run test:fatigue-probe` | <result> |
 | mcp `npm test` + `check:node-loadable` | <result> |
 | `node scripts/build-api-docs.mjs --check` | <result> |
+| `node api/scripts/check-core-loadable.mjs` | <result> |
 
 ## Step 7 greps
 
@@ -395,6 +403,7 @@ merge commit `<sha>`.
 - New file access: <none / what and why it stays a file>
 - Store aliases: <none>
 - Upstream retranslations kept: <what was ported>
+- Deleted files that came back: <none>
 ````
 
 Paste real output, trimmed to the summary lines. A failure that is already on `main` gets a note
