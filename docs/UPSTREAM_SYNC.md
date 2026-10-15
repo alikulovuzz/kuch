@@ -27,9 +27,9 @@ git config remote.upstream.fetch '+refs/tags/v*:refs/upstream-tags/v*'
   with `'no-push' does not appear to be a git repository`.
 - The fetch refspec fetches upstream's release tags and nothing else. Upstream's branches are not
   fetched at all, so upstream `main` cannot be merged by mistake.
-- The tags land in `refs/upstream-tags/`, not `refs/tags/`. Kuch's own release tags use the same
-  `v*` names, so upstream's would collide with them, and `git push --tags` would copy upstream's
-  tags into the fork.
+- The tags land in `refs/upstream-tags/`, not `refs/tags/`. Kuch tags its own releases `vX.Y.Z`
+  too, so upstream's would collide with them, and `git push --tags` would copy upstream's tags into
+  the fork.
 
 Check it:
 
@@ -56,15 +56,16 @@ so. Merge upstream's releases one at a time, oldest first. Each one gets its own
 V=v1.4.2                                   # the upstream tag
 git fetch origin
 git switch -c sync/$V origin/main
-git merge --no-ff -m "Merge upstream $V into sync/$V" upstream-tags/$V
+git merge --no-ff --no-commit -m "Merge upstream $V into sync/$V" upstream-tags/$V
 ```
 
 Always merge the **tag** `upstream-tags/$V`, never an upstream branch, so Kuch only takes code
 upstream has released. The branch name has to start with `sync/`: CI runs the locale merge check
 only on `sync/*` branches. `main` is not touched until the PR merges.
 
-If the merge stops on conflicts, resolve them as in step 3. If it went through cleanly, carry on
-with step 3's checks anyway: the dangerous changes are the ones that merge without a conflict.
+`--no-commit` stops the merge before it commits, even when there is no conflict, so steps 3 and 4
+land in the merge commit itself. Go through step 3 either way: the dangerous changes are the ones
+that merge without a conflict.
 
 ## 3. Resolve the conflicts
 
@@ -75,10 +76,11 @@ Three rules decide almost every conflict.
 
 The fork deleted upstream's mirror, Pages, funding and GitLab/Gitea CI. An upstream change to one
 of those files is a modify/delete conflict, and a new upstream file under one of those paths
-merges in without any conflict at all. One command removes both:
+merges in without any conflict at all. One command removes both (`-f` because the merge has already
+staged the new files):
 
 ```bash
-git rm -r -q --ignore-unmatch -- .gitea .gitlab .gitlab-ci.yml .github/FUNDING.yml \
+git rm -r -q -f --ignore-unmatch -- .gitea .gitlab .gitlab-ci.yml .github/FUNDING.yml \
   .github/workflows/mirror.yml .github/workflows/pages.yml renovate.json scripts/ci
 git ls-files -- .gitea .gitlab .gitlab-ci.yml .github/FUNDING.yml \
   .github/workflows/mirror.yml .github/workflows/pages.yml renovate.json scripts/ci
@@ -133,21 +135,23 @@ When every conflict is resolved, stage the files (`git add <file>`) but do not c
 ## 4. Rebuild the generated coach assets with LF line endings
 
 `api/coach/core/prompts.js` and `api/coach/core/library-data.js` are generated from
-`api/coach/prompts/*.md` and the exercise catalogue. `prompts.js` embeds the `.md` files
-byte for byte, so a Windows checkout (`core.autocrlf=true`) bakes `\r\n` into it. Put the
-prompt sources back as LF first, then rebuild:
+`api/coach/prompts/*.md` and the exercise catalogue. `prompts.js` embeds the `.md` files as
+JSON strings, so a Windows checkout (`core.autocrlf=true`) bakes a `\r` escape into every line
+of it. Put the prompt sources back as LF first, then rebuild:
 
 ```bash
 rm api/coach/prompts/*.md
 git -c core.autocrlf=false checkout -- api/coach/prompts
 node scripts/build-coach-assets.mjs
 node scripts/build-coach-assets.mjs --check
-! grep -q $'\r' api/coach/core/prompts.js && echo "prompts.js is LF"
+! grep -qF '\r' api/coach/core/prompts.js && echo "prompts.js is LF"
 git add api/coach/core
 ```
 
 `--check` must print `in sync` for both files, and the last line must print `prompts.js is LF`.
-On Linux the `rm` and `checkout` change nothing, and the steps are the same.
+On Linux the `rm` and `checkout` change nothing, and the steps are the same. (On a CRLF checkout,
+`--check` reports both generated files as out of date even when they are not, because it compares
+them byte for byte. The rebuild above leaves them LF.)
 
 Then finish the merge:
 
@@ -170,7 +174,7 @@ fails on an allowlist entry that no longer matches anything. For each hit:
 - rename it to Kuch when a user can see it (UI text, locale strings, docs, website), or
 - add an entry to `scripts/brand-allowlist.json` with the reason it stays: attribution, history,
   or an internal key such as a new `opengym-*` storage key. Make the entry as narrow as the
-  existing ones: a path glob plus a `match` regex, not a bare `**`.
+  existing ones: a path glob plus a `match` regex for the kept name, never `**` without a `match`.
 - A stale entry means upstream removed what it allowed. Delete the entry.
 
 **Locale merge check.** From `frontend/`, with the merge commit still at `HEAD`:
@@ -211,12 +215,13 @@ branch. Name them `Sync $V: ...` so the review can tell them from the merge.
 ## 6. Run every suite
 
 These are the same commands as `.github/workflows/test.yml`. The PostgreSQL runs need a throwaway
-database. This one matches CI's:
+database. This one matches CI's, on port 55432 so it does not clash with a Postgres you already run:
 
 ```bash
-docker run -d --rm --name kuch-test-pg -p 5432:5432 \
+docker run -d --rm --name kuch-test-pg -p 55432:5432 \
   -e POSTGRES_USER=kuch -e POSTGRES_PASSWORD=kuch -e POSTGRES_DB=kuch_test postgres:17
-export DATABASE_URL_TEST=postgres://kuch:kuch@localhost:5432/kuch_test
+until docker exec kuch-test-pg pg_isready -U kuch -d kuch_test >/dev/null 2>&1; do sleep 1; done
+export DATABASE_URL_TEST=postgres://kuch:kuch@localhost:55432/kuch_test
 ```
 
 **API, on the files and on PostgreSQL.** Both runs include the storage-boundary test
@@ -270,6 +275,16 @@ node api/scripts/check-core-loadable.mjs
 
 If upstream changed `api/openapi.yaml`, `build-api-docs.mjs --check` fails until you regenerate
 `website/api.html` with `node scripts/build-api-docs.mjs` and commit it.
+
+On a Windows checkout both `--check` commands compare byte for byte and fail on any file git
+checked out with CRLF. There, regenerate instead and let git compare, since git ignores the line
+endings. No output means in sync (the coach assets only after step 4's LF rebuild):
+
+```bash
+node scripts/build-coach-assets.mjs
+node scripts/build-api-docs.mjs
+git diff --stat -- api/coach/core website/api.html
+```
 
 Stop the database afterwards with `docker stop kuch-test-pg`.
 
