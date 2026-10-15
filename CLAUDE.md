@@ -58,8 +58,9 @@ TypeScript — match the existing style by hand.
 This fork (Kuch) lives on GitHub only (`github.com/alikulovuzz/kuch`). Upstream's GitLab mirror,
 GitLab/Gitea CI and Pages demo are not carried over. Pull requests are gated by
 `.github/workflows/test.yml` on Node 22 — the same version as `web/Dockerfile` / `api/Dockerfile`
-(`node:22-alpine`): the frontend, api and MCP suites, the locale checks, and building and booting
-both api image targets. `.github/workflows/docker-publish.yml` publishes the multi-arch images to
+(`node:22-alpine`): the brand check (`scripts/check-brand.mjs`, every upstream brand term
+allowlisted with a reason in `scripts/brand-allowlist.json`), the frontend, api and MCP suites, the
+locale checks, and building and booting both api image targets. `.github/workflows/docker-publish.yml` publishes the multi-arch images to
 `ghcr.io/alikulovuzz/kuch-{api,web}`.
 
 ## Architecture

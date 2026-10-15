@@ -81,12 +81,12 @@
   },
   {
     "path": "**",
-    "match": "opengym-backup[\\w.*<>-]*",
-    "reason": "Never-change name: opengym-backup.json, the data entry in a backup zip, plus the pre-fork opengym-backup-<date> export names that still import and the backup-folder file."
+    "match": "opengym-backup(\\.json|-<date>|-\\*|-\\d{4}-\\d{2}-\\d{2}\\.(json|zip))",
+    "reason": "Never-change name: opengym-backup.json, the data entry in a backup zip, plus the pre-fork opengym-backup-<date> export names that still import."
   },
   {
     "path": "**",
-    "match": "opengym-(state|state-owner|remote|stash|coach)\\.json|opengym-media(-v1|-sync)?|opengym-rt-|opengym-device(-id)?|openGymSheet|opengym-ios/",
+    "match": "opengym-(state|state-owner|remote|stash|coach|backup-folder)\\.json|opengym-media(-v1|-sync)?|opengym-rt-|opengym-device(-id)?|openGymSheet|opengym-ios/",
     "reason": "Kept on-device keys: files, caches, IndexedDB names, locks and history state already on phones and browsers. Renaming orphans that data (Phase 1 inventory, category 5)."
   },
   {

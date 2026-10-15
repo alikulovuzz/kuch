@@ -47,7 +47,9 @@ const run = ({ tracked = {}, allow = [], untracked = {} }) => {
 
 const reason = 'a reason'
 
-describe('check-brand.mjs', () => {
+// Each case spawns git twice and node once: well under a second alone, but past vitest's 5 s
+// default when the whole suite is competing for the CPU.
+describe('check-brand.mjs', { timeout: 60_000 }, () => {
   it('passes a tree without a brand term', () => {
     const r = run({ tracked: { 'README.md': '# Kuch\n\nA gym tracker.\n', 'src/a.js': 'export const x = 1\n' } })
     expect(r.out).toContain('no unexpected')
@@ -155,8 +157,8 @@ describe('check-brand.mjs', () => {
 
   it('refuses an entry without a reason', () => {
     const r = run({ tracked: { 'NOTICE.md': 'openGym\n' }, allow: [{ path: 'NOTICE.md' }] })
-    expect(r.code).toBe(2)
-    expect(r.out).toContain('reason')
+    expect(r.code).toBe(1)
+    expect(r.out).toContain('#1: needs a "reason"')
   })
 
   // The repository's own files and allowlist, so the suite carries the same check CI does.
@@ -164,5 +166,5 @@ describe('check-brand.mjs', () => {
     const r = spawnSync(process.execPath, [script], { cwd: repoRoot, encoding: 'utf8' })
     expect(r.stdout + r.stderr).toContain('no unexpected')
     expect(r.status).toBe(0)
-  }, 60_000)
+  })
 })

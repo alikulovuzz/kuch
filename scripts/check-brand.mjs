@@ -7,9 +7,9 @@
 //
 //   node scripts/check-brand.mjs      (from anywhere in the repository)
 //
-// Exit 0: every hit is covered by scripts/brand-allowlist.json. Exit 1: an uncovered hit, or an
-// allowlist entry that covered nothing (a dead entry would quietly allow the next leak). Exit 2:
-// the check could not run (no git, an invalid allowlist).
+// Exit 0: every hit is covered by scripts/brand-allowlist.json. Exit 1 otherwise: an uncovered
+// hit, an allowlist entry that covered nothing (a dead entry would quietly allow the next leak),
+// or a check that could not run (no git, an invalid allowlist).
 //
 // What is searched: the files git tracks (`git ls-files`), so build output, node_modules and local
 // data never count. The exercise media (catalogue/media/still, catalogue/media/clip) and binary
@@ -38,7 +38,7 @@ const termOf = new Map(TERMS.map(t => [t.toLowerCase(), t]))
 const SKIP_DIRS = ['catalogue/media/still/', 'catalogue/media/clip/']
 const BINARY = /\.(png|jpe?g|gif|webp|ico|icns|bmp|tiff?|avif|mp4|mov|webm|mkv|mp3|wav|ogg|m4a|woff2?|ttf|otf|eot|pdf|zip|gz|tgz|bz2|xz|7z|jar|aar|apk|aab|keystore|jks|p12|so|dylib|dll|exe|class|wasm|db|sqlite)$/i
 
-const fail = msg => { console.error(msg); process.exit(2) }
+const fail = msg => { console.error(msg); process.exit(1) }
 
 const git = (...args) => {
   try { return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 256 << 20 }) } catch (e) { fail(`git ${args.join(' ')} failed: ${e.message}`) }
@@ -123,17 +123,17 @@ for (const file of git('ls-files', '-z').split('\0')) {
       lineCache = { start: lineStart, line: text.slice(lineStart, end === -1 ? undefined : end), spans: new Map() }
     }
     const { line } = lineCache
-    const s = m.index - lineStart, e = s + m[0].length
+    const hitStart = m.index - lineStart, hitEnd = hitStart + m[0].length
     let covered = false
     for (const a of candidates) {
       if (a.match) {
         if (!lineCache.spans.has(a)) lineCache.spans.set(a, spans(a.match, line))
-        if (!lineCache.spans.get(a).some(([from, to]) => from <= s && e <= to)) continue
+        if (!lineCache.spans.get(a).some(([from, to]) => from <= hitStart && hitEnd <= to)) continue
       }
       a.used++
       covered = true
     }
-    if (!covered) findings.push(`${file}:${lineNo}  ${termOf.get(m[0].toLowerCase())}  "${excerpt(line, s, e)}"`)
+    if (!covered) findings.push(`${file}:${lineNo}  ${termOf.get(m[0].toLowerCase())}  "${excerpt(line, hitStart, hitEnd)}"`)
   }
 }
 
