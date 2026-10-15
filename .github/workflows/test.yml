@@ -70,6 +70,26 @@ jobs:
       # Property probe over ~108k comparisons; too slow for the unit suite, cheap here.
       - run: npm run test:fatigue-probe
         working-directory: frontend
+      # Upstream sync branches only. A merge that took upstream's side of a locale conflict
+      # reverts the fork's translations, and check-locales above cannot see it: every key is still
+      # there. Each merge commit on the branch is checked against its own two parents, so the
+      # PR head and full history are needed rather than the shallow PR merge ref. Last in the job:
+      # this checkout moves the working tree, and clean: false keeps node_modules.
+      - if: startsWith(github.head_ref || github.ref_name, 'sync/')
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          clean: false
+      - name: locale merge check, every merge commit on the sync branch
+        if: startsWith(github.head_ref || github.ref_name, 'sync/')
+        working-directory: frontend
+        run: |
+          status=0
+          for c in $(git rev-list --merges --max-parents=2 origin/main..HEAD); do
+            node scripts/check-locale-merge.mjs "$c" || status=1
+          done
+          exit $status
 
 
   mcp:
