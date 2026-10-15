@@ -190,7 +190,7 @@ describe('Settings: removing a passkey', () => {
     const { host, close, edit, changed } = await openRemove()
     expect(host.querySelector('h3').textContent).toBe('Remove this passkey?')
     expect(host.textContent).toContain('Laptop')
-    expect(host.textContent).toMatch(/stays signed in. If it was lost, use Sign out everywhere/)
+    expect(host.textContent).toMatch(/signs you out everywhere else. Paired phones must be paired again/)
     expect(host.textContent).toContain('First confirm that it is you.')
     // No password on this profile, or none that counts: the passkey is the only proof offered.
     expect(byPlaceholder(host, 'Current password')).toBeNull()

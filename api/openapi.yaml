@@ -163,6 +163,298 @@ security:
   - bearerAuth: []
 
 paths:
+
+  /api/account/security:
+    get:
+      tags: [auth]
+      summary: Inspect personal sign-in methods
+      description: 'Session required. Returns Google availability and linked state, password availability and configured state, passkey count, local email verification and pending email, and mail availability. No secrets.'
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/auth/google/start:
+    post:
+      tags: [auth]
+      summary: Start Google sign-in
+      description: 'Starts a five-minute browser-bound state/nonce and PKCE transaction. Returns an authorization URL and sets an HttpOnly transaction cookie. returnTo accepts only an admin destination in this deployment.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                returnTo: { type: string }
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/auth/google/callback:
+    get:
+      tags: [auth]
+      summary: Complete Google sign-in
+      description: 'Requires matching state and transaction cookie. Exchanges the code, validates the signed ID token, and returns a 303 redirect to the preserved admin destination. Unknown identities create no profile. Errors use localized authError codes at the destination.'
+      security: []
+      parameters:
+        - in: query
+          name: state
+          required: true
+          schema: { type: string }
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: error
+          schema: { type: string }
+      responses:
+        '303':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/account/google/link:
+    post:
+      tags: [auth]
+      summary: Explicitly link Google
+      description: 'Session and fresh current-password, passkey or Google ownership proof required. Returns a browser authorization URL. Conflicting identities cannot merge or overwrite another profile.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                returnTo: { type: string }
+                current: { type: string }
+                cid: { type: string }
+                credential: { type: object }
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/account/google/proof:
+    post:
+      tags: [auth]
+      summary: Confirm ownership using linked Google
+      description: 'Session and an available linked Google identity required. Returns an authorization URL. Successful callback issues a five-minute single-use proof bound to this session for one security change.'
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/account/google:
+    delete:
+      tags: [auth]
+      summary: Disconnect Google
+      description: 'Session and fresh proof required. Refuses the final usable method. Revokes other browser and paired-mobile sessions and renews the caller cookie or bearer token.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current: { type: string }
+                cid: { type: string }
+                credential: { type: object }
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/account/email-verification:
+    post:
+      tags: [auth]
+      summary: Request login email verification
+      description: 'Session and fresh proof required. Preserves current email until verification. Requires configured mail and password login. Sends a single-use 24-hour link; resend limited to once per minute.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                current: { type: string }
+                cid: { type: string }
+                credential: { type: object }
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/auth/email/verify:
+    post:
+      tags: [auth]
+      summary: Verify a login email
+      description: 'Consumes a valid unexpired verification token. Rechecks email uniqueness and session version. Reused, superseded or expired links fail with token-invalid; conflicts return email-taken.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/auth/email/recover:
+    post:
+      tags: [auth]
+      summary: Request password recovery
+      description: 'For verified local email only. Generic success whether eligible or unknown. Sends a single-use 30-minute link when eligible and rate limits repeat mail. Missing mail or password configuration returns mail-unavailable.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
+  /api/auth/email/reset:
+    post:
+      tags: [auth]
+      summary: Reset password using email recovery
+      description: 'Consumes a recovery token after password-policy validation and a concurrency recheck. Revokes all browser and paired-mobile sessions. Does not sign in automatically.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: 'Operation completed as described above.'
+        '400':
+          description: 'Invalid request or expired, reused or invalid token.'
+        '401':
+          description: 'Session required or revoked.'
+        '403':
+          description: 'Ownership proof refused or method disabled.'
+        '409':
+          description: 'Conflicting identity or final usable method.'
+        '429':
+          description: 'Rate limited; retry later.'
+        '503':
+          description: 'Provider or mail unavailable; existing methods remain usable.'
+
   /api/health:
     get:
       tags: [meta]

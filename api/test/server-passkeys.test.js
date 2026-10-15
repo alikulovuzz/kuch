@@ -304,12 +304,16 @@ test('renaming touches only the caller’s own passkey', async t => {
 test('removing: never the last way in, never someone else’s, audited, and it stops that passkey signing in', async t => {
   const a = softPasskey(), b = softPasskey(), bea = softPasskey();
   const h = await startServer(t, { users: [user('u1', 'Ana'), user('u2', 'Bea')], creds: [a.row('u1', { name: 'Old phone' }), b.row('u1'), bea.row('u2')] });
-  const ip = '198.51.100.29', cookie = mintSession('u1');
+  const ip = '198.51.100.29', oldCookie = mintSession('u1');
+  let cookie = oldCookie;
   const del = async (id, proof) => h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(id), { body: await h.stepUp(proof, ip), cookie, ip });
   assert.equal((await del(bea.id, a)).status, 404);
   // A passkey may confirm its own removal: whoever uses it holds it.
   const first = await del(a.id, a);
   assert.equal(first.status, 200);
+  cookie = first.cookie;
+  assert.ok(cookie);
+  assert.equal((await h.req('GET', '/api/me', { cookie: oldCookie })).status, 401);
   assert.deepEqual(first.body.passkeys.map(p => p.id), [b.id]);
   assert.equal(first.body.lastWayIn, true);
   assert.ok(h.audit().some(e => e.ev === 'auth.passkey.remove' && e.uid === 'u1' && e.msg === 'Old phone'));
@@ -320,7 +324,7 @@ test('removing: never the last way in, never someone else’s, audited, and it s
   // The removed passkey is unknown from now on…
   const lo = (await h.req('POST', '/api/login/options', { body: {} })).body;
   assert.equal((await h.req('POST', '/api/login/verify', { body: { cid: lo.cid, credential: a.assertion(lo.options.challenge) } })).status, 404);
-  // …but sessions are not tied to a passkey, so one it opened lasts until "sign out everywhere".
+  // The renewed current session survives the removal.
   assert.equal((await h.req('GET', '/api/me', { cookie })).status, 200);
 });
 
@@ -363,8 +367,9 @@ test('removing a passkey needs proof made for it: none, another profile’s pass
   await refused({ cid: lo2.cid, credential: b.assertion(lo2.options.challenge) }, 'passkey');
   // A proof works once: the one that removed a passkey removes nothing else afterwards.
   const proof = await h.stepUp(b, ip);
-  assert.equal((await h.req('DELETE', url, { body: proof, cookie, ip })).status, 200);
-  const again = await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(b.id), { body: proof, cookie, ip });
+  const removed = await h.req('DELETE', url, { body: proof, cookie, ip });
+  assert.equal(removed.status, 200);
+  const again = await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(b.id), { body: proof, cookie: removed.cookie, ip });
   assert.equal(again.status, 409);   // b is the last way in now, which is answered before any proof
   assert.deepEqual((await h.db()).creds.filter(c => c.userId === 'u1').map(c => c.id), [b.id]);
   assert.equal(h.audit().filter(e => e.ev === 'auth.passkey.remove').length, 1);
@@ -375,8 +380,9 @@ test('a proof is spent by the removal it was made for, and a replayed one remove
   const h = await startServer(t, { users: [user('u1', 'Ana')], creds: [a.row('u1'), b.row('u1'), c.row('u1')] });
   const ip = '198.51.100.31', cookie = mintSession('u1');
   const proof = await h.stepUp(c, ip);
-  assert.equal((await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(a.id), { body: proof, cookie, ip })).status, 200);
-  const replay = await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(b.id), { body: proof, cookie, ip });
+  const removed = await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(a.id), { body: proof, cookie, ip });
+  assert.equal(removed.status, 200);
+  const replay = await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(b.id), { body: proof, cookie: removed.cookie, ip });
   assert.equal(replay.status, 403);
   assert.equal(replay.body.code, 'passkey');
   assert.deepEqual((await h.db()).creds.map(x => x.id), [b.id, c.id]);
@@ -427,7 +433,7 @@ test('removing the password and the last passkey at the same time leaves one of 
     (async () => h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(key.id), { body: await h.stepUp(key, ip), cookie, ip }))()
   ]);
   assert.deepEqual([pw.status, pk.status].filter(s => s === 200).length, 1, `${pw.status} ${JSON.stringify(pw.body)} / ${pk.status} ${JSON.stringify(pk.body)}`);
-  assert.ok([403, 409].includes(pw.status === 200 ? pk.status : pw.status));
+  assert.ok([401, 403, 409].includes(pw.status === 200 ? pk.status : pw.status));
   const u = (await h.db()).users[0];
   assert.equal((await h.db()).creds.length + (u.pw ? 1 : 0), 1, 'the profile kept exactly one way in');
 });
@@ -454,16 +460,18 @@ test('a password-only profile keeps its password until a passkey is added, and t
   const opt = await h.req('POST', '/api/account/passkeys/options', { body: { current: GOOD }, cookie, ip });
   await h.req('POST', '/api/account/passkeys/verify', { body: { cid: opt.body.cid, credential: fresh.attestation(opt.body.options.challenge) }, cookie, ip });
   assert.equal((await h.req('DELETE', '/api/account/password', { body: {}, cookie, ip })).body.code, 'current-required');
-  assert.equal((await h.req('DELETE', '/api/account/password', { body: { current: GOOD }, cookie, ip })).status, 200);
+  const removed = await h.req('DELETE', '/api/account/password', { body: { current: GOOD }, cookie, ip });
+  assert.equal(removed.status, 200);
   // And now the passkey is the last way in.
-  assert.equal((await h.req('DELETE', '/api/account/passkeys?id=' + fresh.id, { body: await h.stepUp(fresh, ip), cookie, ip })).body.code, 'last-way-in');
+  assert.equal((await h.req('DELETE', '/api/account/passkeys?id=' + fresh.id, { body: await h.stepUp(fresh, ip), cookie: removed.cookie, ip })).body.code, 'last-way-in');
 });
 
 /* ------------------------------------------------------------------ device links ---------- */
 
 // Makes a link as Ana would in Settings: confirmed with her passkey.
 async function makeLink(h, key, uid, ip) {
-  return h.req('POST', '/api/account/device-link', { body: await h.stepUp(key, ip), cookie: mintSession(uid), ip });
+  const account = (await h.db()).users.find(u => u.id === uid);
+  return h.req('POST', '/api/account/device-link', { body: await h.stepUp(key, ip), cookie: mintSession(uid, account.sv || 0), ip });
 }
 // Redeems it as the other device would: options, then the new passkey.
 async function redeem(h, code, fresh, ip, name) {
@@ -563,7 +571,7 @@ test('removing a passkey drops an unused code, so one made with it just before a
   assert.deepEqual((await h.db()).creds.map(c => c.id), [key.id]);
   // A refused removal leaves the owner's own code alone.
   const mine = (await makeLink(h, key, 'u1', ip)).body.code;
-  assert.equal((await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(key.id), { body: await h.stepUp(key, ip), cookie: mintSession('u1'), ip })).status, 409);
+  assert.equal((await h.req('DELETE', '/api/account/passkeys?id=' + encodeURIComponent(key.id), { body: await h.stepUp(key, ip), cookie: mintSession('u1', 1), ip })).status, 409);
   assert.equal((await h.req('POST', '/api/device-link/options', { body: { code: mine }, ip })).status, 200);
 });
 

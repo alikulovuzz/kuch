@@ -238,7 +238,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>Kuch v1.4.1</span>
-    <span>69 endpoints</span>
+    <span>79 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
@@ -349,6 +349,569 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <h2>Auth</h2>
   <p class="sub">Passkey (WebAuthn) registration and login, sessions</p>
   <div class="eps">
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/account/security</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Inspect personal sign-in methods</span>
+  </summary>
+  <div class="ep-body">
+<p>Session required. Returns Google availability and linked state, password availability and configured state, passkey count, local email verification and pending email, and mail availability. No secrets.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/auth/google/start</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Start Google sign-in</span>
+  </summary>
+  <div class="ep-body">
+<p>Starts a five-minute browser-bound state/nonce and PKCE transaction. Returns an authorization URL and sets an HttpOnly transaction cookie. returnTo accepts only an admin destination in this deployment.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">returnTo</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/auth/google/callback</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Complete Google sign-in</span>
+  </summary>
+  <div class="ep-body">
+<p>Requires matching state and transaction cookie. Exchanges the code, validates the signed ID token, and returns a 303 redirect to the preserved admin destination. Unknown identities create no profile. Errors use localized authError codes at the destination.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+<p class="ep-h">Query parameters</p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">state<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">code</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">error</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s3">303</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/account/google/link</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Explicitly link Google</span>
+  </summary>
+  <div class="ep-body">
+<p>Session and fresh current-password, passkey or Google ownership proof required. Returns a browser authorization URL. Conflicting identities cannot merge or overwrite another profile.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">returnTo</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">current</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">cid</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">credential</span>
+    <span class="p-type">object</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/account/google/proof</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Confirm ownership using linked Google</span>
+  </summary>
+  <div class="ep-body">
+<p>Session and an available linked Google identity required. Returns an authorization URL. Successful callback issues a five-minute single-use proof bound to this session for one security change.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m delete">DELETE</span>
+    <span class="ep-path"><code>/api/account/google</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Disconnect Google</span>
+  </summary>
+  <div class="ep-body">
+<p>Session and fresh proof required. Refuses the final usable method. Revokes other browser and paired-mobile sessions and renews the caller cookie or bearer token.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">current</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">cid</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">credential</span>
+    <span class="p-type">object</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/account/email-verification</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Request login email verification</span>
+  </summary>
+  <div class="ep-body">
+<p>Session and fresh proof required. Preserves current email until verification. Requires configured mail and password login. Sends a single-use 24-hour link; resend limited to once per minute.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">email</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">current</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">cid</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">credential</span>
+    <span class="p-type">object</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/auth/email/verify</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Verify a login email</span>
+  </summary>
+  <div class="ep-body">
+<p>Consumes a valid unexpired verification token. Rechecks email uniqueness and session version. Reused, superseded or expired links fail with token-invalid; conflicts return email-taken.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">token</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/auth/email/recover</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Request password recovery</span>
+  </summary>
+  <div class="ep-body">
+<p>For verified local email only. Generic success whether eligible or unknown. Sends a single-use 30-minute link when eligible and rate limits repeat mail. Missing mail or password configuration returns mail-unavailable.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">email</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-undefined">
+  <summary>
+    <span class="m post">POST</span>
+    <span class="ep-path"><code>/api/auth/email/reset</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Reset password using email recovery</span>
+  </summary>
+  <div class="ep-body">
+<p>Consumes a recovery token after password-policy validation and a concurrency recheck. Revokes all browser and paired-mobile sessions. Does not sign in automatically.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">token</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">password</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">Operation completed as described above.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">Invalid request or expired, reused or invalid token.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">Session required or revoked.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Ownership proof refused or method disabled.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">409</span>
+    <span class="p-desc">Conflicting identity or final usable method.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">429</span>
+    <span class="p-desc">Rate limited; retry later.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">Provider or mail unavailable; existing methods remain usable.</span>
+  </div>
+    </div>
+  </div>
+</details>
 
 <details class="ep" id="op-getMe">
   <summary>

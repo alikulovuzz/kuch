@@ -5,15 +5,19 @@
 // belongs here and not in Admin.jsx: it is the only part of the feature that can be wrong in a way
 // a person sees, and as a plain module it is testable without mounting the dashboard.
 //
-// Like the rest of the admin screen this is English-only — the operator surface deliberately
-// stays out of the per-language string packs (see the header of views/Admin.jsx). Times still
-// follow the UI language, the way numbers and dates already do.
+// The admin translator localizes known labels; profile names and unknown server codes stay intact.
 import { dateLocale } from './i18n-core.js'
 
 // The first segment of an event name is also the filter chip it belongs to.
 export const auditCat = ev => String(ev || '').split('.')[0]
 
 const LABELS = {
+  'auth.google.ok': 'Signed in with Google',
+  'auth.google.fail': 'Google sign-in failed',
+  'auth.google.link': 'Linked Google',
+  'auth.google.remove': 'Disconnected Google',
+  'auth.email.verify': 'Verified login email',
+  'auth.email.recovery': 'Reset password using email recovery',
   'auth.login.ok': 'Signed in',
   'auth.login.fail': 'Sign-in failed',
   'auth.register.ok': 'Created a profile',
@@ -115,20 +119,21 @@ const ACTS = {
   'device-link': 'making a one-time code for another device'
 }
 export const auditAct = act => ACTS[act] || (act ? String(act) : '')
+export const auditVocabulary = [...Object.values(LABELS), ...Object.values(REASONS), ...Object.values(ACTS), 'Unknown event', 'unknown caller']
 
 // → { title, sub }. `sub` is the house "a · b · c" metadata line used by every list row.
-export function auditLine(e) {
+export function auditLine(e, t = value => value) {
   if (!e) return { title: '', sub: '' }
   const parts = []
   if (e.name) parts.push(e.name)
   else if (e.uid) parts.push(e.uid)
-  else if (!e.ok) parts.push('unknown caller')
+  else if (!e.ok) parts.push(t('unknown caller'))
   if (e.tname) parts.push('→ ' + e.tname)
-  if (e.act) parts.push(auditAct(e.act))
+  if (e.act) parts.push(t(auditAct(e.act)))
   // The reason codes and the invite codes share the msg field; only failures read as a reason.
-  if (e.msg) parts.push(e.ok ? e.msg : auditReason(e.msg))
+  if (e.msg) parts.push(e.ok ? e.msg : t(auditReason(e.msg)))
   if (e.ip) parts.push(e.ip)
-  return { title: auditLabel(e.ev), sub: parts.join(' · ') }
+  return { title: t(auditLabel(e.ev)), sub: parts.join(' · ') }
 }
 
 // The activity log is the one place in the app that needs a clock, and fmtDate() renders none —

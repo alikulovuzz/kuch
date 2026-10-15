@@ -37,6 +37,8 @@ import { atomicWrite as durableWrite } from './durable.js';
 import { store, UNREADABLE, StoreUnavailable, InvalidDocument } from './store/index.js';
 import { keyedLock } from './keyed-lock.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
+import { googleAuth } from './google-auth.js';
+import { accountMail } from './account-mail.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -72,6 +74,8 @@ const ALLOW_GUEST = !/^(0|false|no|off)$/i.test(process.env.ALLOW_GUEST || '');
 // every account that opts in, so an instance has to ask for it. While it is off every password
 // route answers 404 and the app shows none of it; hashes already stored stay where they are.
 const PASSWORD_LOGIN = /^(1|true|yes|on)$/i.test(process.env.PASSWORD_LOGIN || '');
+const google = googleAuth({ publicBase: process.env.PUBLIC_BASE_URL || ORIGIN, clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET });
+const mail = accountMail();
 // The language the sign-in screen, and every profile that never picked one, starts in (#303) —
 // for an instance whose people share a language. Only a tag's shape is checked here; the app
 // matches it against the languages it has and ignores one it does not know. Unset, it is left
@@ -887,6 +891,9 @@ setInterval(() => { AUTH_BURST.sweep(); ADDR_FAILS.sweep(); ACCOUNT_FAILS.sweep(
 // Route -> the kind of failure it can count. Every route listed here also spends the burst
 // budget; `null` spends only that.
 const THROTTLED = {
+  'POST /api/auth/email/recover': null, 'POST /api/auth/email/reset': 'password',
+  'POST /api/account/email-verification': 'email', 'POST /api/auth/email/verify': null,
+  'POST /api/auth/google/start': null, 'POST /api/account/google/link': null, 'POST /api/account/google/proof': null, 'DELETE /api/account/google': null,
   'POST /api/login/password': 'password', 'POST /api/login/password-reset': 'password',
   'POST /api/register/password': 'signup',
   'POST /api/account/password': 'password', 'DELETE /api/account/password': null,
@@ -975,6 +982,10 @@ const hasPassword = u => !!(u && u.pw && typeof u.pw.h === 'string');
 // PASSWORD_LOGIN off, a password kept from when it was on neither signs in nor proves anything
 // (proveOwner), and does not keep a profile's last passkey in place.
 const passwordWayIn = u => PASSWORD_LOGIN && hasPassword(u);
+const googleWayIn = u => google.available && u?.google?.issuer === 'https://accounts.google.com' && !!u.google.subject;
+const googleProofs = new Map();
+const proofCookieName = SECURE ? '__Host-kuch_proof' : 'kuch_proof';
+const sessionFingerprint = req => crypto.createHash('sha256').update(cookieToken(req) || req.headers.authorization || '').digest('hex');
 const passwordHolder = k => db.users.find(u => hasPassword(u) && nameKey(u.name) === k) || null;
 const holdsName = u => hasPassword(u) || !!(u.pwReset && u.pwReset.exp > Date.now());
 // An e-mail is a second name to sign in with (see "e-mail as a sign-in name" below), so a name
@@ -1054,6 +1065,15 @@ function setPassword(user, h) {
   dropDeviceLinks(db, user.id);
 }
 
+function revokeOtherSessions(req, user) {
+  const bearer = sessionOf(req)?.bearer;
+  user.sv = sessionVersion(user) + 1;
+  for (const [key, value] of pairings) if (value.uid === user.id) pairings.delete(key);
+  dropDeviceLinks(db, user.id);
+  return bearer ? { body: { token: makeSession(user) }, headers: {} }
+    : { body: {}, headers: { 'Set-Cookie': sessionCookie(user) } };
+}
+
 // A passkey assertion made just now by the signed-in account itself — how someone who has no
 // password yet proves it is them before setting one. A session alone is not enough for that:
 // it may be a cookie someone walked off with, and a password would turn it into a way in that
@@ -1130,6 +1150,12 @@ function passwordAttempt(req, res, k) {
 // proof is logged as `auth.proof.fail` for that change, not as a failed sign-in — the owner was
 // signed in all along, and "Password sign-in failed" sent an admin looking for the wrong thing.
 async function proveOwner(req, res, user, body, act) {
+  const proofValues = cookieValues(req, proofCookieName);
+  const proof = proofValues.length === 1 && googleProofs.get(proofValues[0]);
+  if (proof && googleWayIn(user) && proof.uid === user.id && proof.version === sessionVersion(user) && proof.expires > Date.now() && proof.session === sessionFingerprint(req)) {
+    googleProofs.delete(proofValues[0]);
+    return 'google';
+  }
   if (body.credential) {
     if (await passkeyStepUp(user, body)) return 'passkey';
     audit(req, 'auth.proof.fail', { ok: false, user, msg: 'step-up-failed', act });
@@ -1161,14 +1187,36 @@ async function proveOwner(req, res, user, body, act) {
 
 if (PASSWORD_LOGIN) warmUp();
 
+const authTokenHash = token => crypto.createHash('sha256').update(String(token || '')).digest('hex');
+async function requestEmailVerification(req, res, user, body) {
+  if (!PASSWORD_LOGIN) return json(res, 403, { error: 'Password login is disabled', code: 'password-unavailable' });
+  if (!mail.available) return json(res, 503, { error: 'Outgoing mail is not configured', code: 'mail-unavailable' });
+  const email = normalizeEmail(body.email);
+  if (!email) return json(res, 400, EMAIL_ERRORS.invalid);
+  if (!(await proveOwner(req, res, user, body, 'email-verify'))) return;
+  if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
+  if (emailTaken(email, user.id)) return json(res, 409, EMAIL_ERRORS.taken);
+  if (user.emailVerification?.sentAt > Date.now() - 60000) return json(res, 429, { error: 'Wait before resending', code: 'locked', retryAfter: 60 });
+  const token = crypto.randomBytes(32).toString('base64url');
+  const record = { hash: authTokenHash(token), email, exp: Date.now() + 86400000, sentAt: Date.now(), version: sessionVersion(user) };
+  user.emailVerification = record;
+  await saveDb();
+  try { await mail.send(email, 'verify', token); }
+  catch { return json(res, 503, { error: 'Verification mail could not be delivered. Retry later.', code: 'mail-failed' }); }
+  json(res, 200, { ok: true, pendingEmail: email });
+}
+
 // Taking the address away: the profile then signs in by its name only. Asks the same proof as
 // setting one; a profile without an address gets 200 with none asked.
 async function removeEmail(req, res, user, body) {
-  if (!user.email) return json(res, 200, { ok: true, email: null });
+  if (!user.email && !user.emailVerification) return json(res, 200, { ok: true, email: null });
   const proof = await proveOwner(req, res, user, body, 'email-remove');
   if (!proof) return;
   if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
   delete user.email;
+  delete user.emailVerified;
+  delete user.emailVerification;
+  delete user.emailRecovery;
   await saveDb();
   audit(req, 'auth.email.remove', { user, msg: proof });
   json(res, 200, { ok: true, email: null });
@@ -1320,14 +1368,14 @@ const passwordRoutes = {
   // could sign it in again. Same proof as setting one (proveOwner) — the password itself, or a
   // passkey assertion made for this request — asked only once the removal could go ahead, so a
   // refusal the profile's state already decides spends no passkey prompt and no password check.
-  // Existing sessions are left alone; "sign out everywhere" ends them.
+  // Removing a method revokes other browser and paired-mobile sessions.
   'DELETE /api/account/password': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     const body = await readBody(req);
     const lastWayIn = () => json(res, 409, { error: 'the password is the only way into this profile', code: 'last-way-in' });
     if (!hasPassword(user)) return json(res, 200, { ok: true });
-    if (!passkeyCount(user)) return lastWayIn();
+    if (!passkeyCount(user) && !googleWayIn(user)) return lastWayIn();
     const proof = await proveOwner(req, res, user, body, 'password-remove');
     if (!proof) return;
     if (proof === 'passkey') await saveDb();   // the confirming passkey's counter and last use
@@ -1335,11 +1383,12 @@ const passwordRoutes = {
     // have been removed by a request that ran alongside this one.
     if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
     if (!hasPassword(user)) return json(res, 200, { ok: true });
-    if (!passkeyCount(user)) return lastWayIn();
+    if (!passkeyCount(user) && !googleWayIn(user)) return lastWayIn();
     delete user.pw;
+    const renewed = revokeOtherSessions(req, user);
     await saveDb();
     audit(req, 'auth.password.remove', { user });
-    json(res, 200, { ok: true });
+    json(res, 200, { ok: true, ...renewed.body }, renewed.headers);
   },
 
   // Set, change (`email`) or remove (`email` empty or null, or DELETE) the address this profile
@@ -1353,6 +1402,7 @@ const passwordRoutes = {
     if (!s) return json(res, 401, { error: 'not signed in' });
     const { user } = s;
     const body = await readBody(req);
+    if (isAdmin(user)) return requestEmailVerification(req, res, user, body);
     if (body.email == null || (typeof body.email === 'string' && body.email.trim() === '')) return removeEmail(req, res, user, body);
     const email = normalizeEmail(body.email);
     if (!email) return json(res, 400, EMAIL_ERRORS.invalid);
@@ -1479,7 +1529,7 @@ const passkeyState = u => {
   const passkeys = listPasskeys(db, u.id);
   // `password`: whether the password can confirm an addition or a removal (proveOwner) — only
   // while password sign-in is on. `lastWayIn`: whether removing any one passkey would be refused.
-  return { passkeys, password: passwordWayIn(u), lastWayIn: passkeys.length + (passwordWayIn(u) ? 1 : 0) <= 1 };
+  return { passkeys, password: passwordWayIn(u), lastWayIn: passkeys.length + (passwordWayIn(u) ? 1 : 0) + (googleWayIn(u) ? 1 : 0) <= 1 };
 };
 const LIMIT = { error: `a profile can have at most ${MAX_PASSKEYS} passkeys`, code: 'passkey-limit' };
 const LINK_INVALID = { error: 'that code is wrong, used or expired', code: 'link-invalid' };
@@ -1597,18 +1647,18 @@ const passkeyRoutes = {
     const id = new URL(req.url, 'http://x').searchParams.get('id') || '';
     const body = await readBody(req);
     const refuse = r => json(res, r.code === 'last-way-in' ? 409 : 404, { error: r.error, code: r.code });
-    const refused = passkeyRemovalRefused(db, user.id, id, passwordWayIn(user) ? 1 : 0);
+    const refused = passkeyRemovalRefused(db, user.id, id, (passwordWayIn(user) ? 1 : 0) + (googleWayIn(user) ? 1 : 0));
     if (refused) return refuse(refused);
     const proof = await proveOwner(req, res, user, body, 'passkey-remove');
     if (!proof) return;
     if (proof === 'passkey') await saveDb();   // the confirming passkey's counter and last use
     if (readSession(req) !== user) return notSignedIn(res);
-    const r = removePasskeyRecord(db, user.id, id, passwordWayIn(user) ? 1 : 0);
+    const r = removePasskeyRecord(db, user.id, id, (passwordWayIn(user) ? 1 : 0) + (googleWayIn(user) ? 1 : 0));
     if (r.error) return refuse(r);
-    dropDeviceLinks(db, user.id);
+    const renewed = revokeOtherSessions(req, user);
     await saveDb();
     audit(req, 'auth.passkey.remove', { user, msg: r.row.name || null });
-    json(res, 200, { ok: true, ...passkeyState(user) });
+    json(res, 200, { ok: true, ...passkeyState(user), ...renewed.body }, renewed.headers);
   },
 
   // Makes the code another device redeems below. Same proof as adding a passkey here, because the
@@ -1862,6 +1912,154 @@ async function databaseHealth() {
 }
 
 const routes = {
+  'POST /api/account/google/proof': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!googleWayIn(user)) return json(res, 409, { error: 'Google is not available for this profile', code: 'google-unavailable' });
+    const result = google.begin('/admin?section=security', { id: user.id, version: sessionVersion(user), proof: true, session: sessionFingerprint(req) });
+    json(res, 200, { url: result.url }, { 'Set-Cookie': result.cookie });
+  },
+  'POST /api/auth/email/recover': async (req, res) => {
+    if (!PASSWORD_LOGIN || !mail.available) return json(res, 503, { error: 'Email recovery is not configured. Use another sign-in method or contact the server operator.', code: 'mail-unavailable' });
+    const body = await readBody(req);
+    const email = normalizeEmail(body.email);
+    const user = email && db.users.find(u => !u.disabled && u.email === email && u.emailVerified === email);
+    const acknowledge = () => json(res, 200, { ok: true, message: 'If the address is eligible, a recovery link has been sent. If no mail arrives, retry later or use another method.' });
+    if (user && !(user.emailRecovery?.sentAt > Date.now() - 60000)) {
+      const token = crypto.randomBytes(32).toString('base64url');
+      user.emailRecovery = { hash: authTokenHash(token), exp: Date.now() + 1800000, sentAt: Date.now(), version: sessionVersion(user), email };
+      await saveDb();
+      acknowledge();
+      // Delivery failure must not reveal whether this identifier has a verified account.
+      try { await mail.send(email, 'reset', token); } catch { console.warn('Account recovery mail delivery failed'); }
+      return;
+    }
+    acknowledge();
+  },
+  'POST /api/auth/email/reset': async (req, res) => {
+    if (!PASSWORD_LOGIN) return json(res, 403, { error: 'Password login is disabled', code: 'password-unavailable' });
+    const body = await readBody(req);
+    const hash = authTokenHash(body.token);
+    const user = db.users.find(u => u.emailRecovery?.hash === hash);
+    const record = user?.emailRecovery;
+    const valid = () => user && db.users.includes(user) && !user.disabled && user.emailRecovery === record && record.exp > Date.now() && record.version === sessionVersion(user) && record.email === user.email && user.emailVerified === user.email;
+    if (!valid()) return json(res, 400, { error: 'Recovery link expired or invalid', code: 'token-invalid' });
+    const problem = passwordProblem(body.password, user.name);
+    if (problem) return policyError(res, problem);
+    if (nameTaken(user.name, user.id)) return json(res, 409, { error: 'Profile name conflicts with another sign-in identifier', code: 'name-taken' });
+    const h = await hashPassword(body.password);
+    if (!valid()) return json(res, 400, { error: 'Recovery link expired or invalid', code: 'token-invalid' });
+    if (nameTaken(user.name, user.id)) return json(res, 409, { error: 'Profile name conflicts with another sign-in identifier', code: 'name-taken' });
+    delete user.emailRecovery;
+    setPassword(user, h);
+    await saveDb();
+    audit(req, 'auth.email.recovery', { user });
+    json(res, 200, { ok: true });
+  },
+  'POST /api/account/email-verification': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    return requestEmailVerification(req, res, user, await readBody(req));
+  },
+  'POST /api/auth/email/verify': async (req, res) => {
+    if (!PASSWORD_LOGIN) return json(res, 403, { error: 'Password login is disabled', code: 'password-unavailable' });
+    const body = await readBody(req);
+    const hash = authTokenHash(body.token);
+    const user = db.users.find(u => u.emailVerification?.hash === hash);
+    const pending = user?.emailVerification;
+    if (!user || user.disabled || pending.exp <= Date.now() || pending.version !== sessionVersion(user)) return json(res, 400, { error: 'Verification link expired or invalid', code: 'token-invalid' });
+    if (emailTaken(pending.email, user.id)) return json(res, 409, EMAIL_ERRORS.taken);
+    user.email = pending.email;
+    user.emailVerified = pending.email;
+    delete user.emailVerification;
+    delete user.emailRecovery;
+    await saveDb();
+    audit(req, 'auth.email.verify', { user });
+    json(res, 200, { ok: true });
+  },
+  'DELETE /api/account/google': async (req, res) => {
+    const s = sessionOf(req);
+    if (!s) return json(res, 401, { error: 'not signed in' });
+    const { user } = s;
+    const body = await readBody(req);
+    if (!(await proveOwner(req, res, user, body, 'google-remove'))) return;
+    if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
+    if (!passwordWayIn(user) && !passkeyCount(user)) return json(res, 409, { error: 'Keep another usable sign-in method', code: 'last-way-in' });
+    delete user.google;
+    user.sv = sessionVersion(user) + 1;
+    for (const [key, value] of pairings) if (value.uid === user.id) pairings.delete(key);
+    dropDeviceLinks(db, user.id);
+    const session = s.bearer ? makeSession(user) : sessionCookie(user);
+    await saveDb();
+    audit(req, 'auth.google.remove', { user });
+    json(res, 200, { ok: true, ...(s.bearer ? { token: session } : {}) }, s.bearer ? {} : { 'Set-Cookie': session });
+  },
+  'POST /api/account/google/link': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    if (!google.available) return json(res, 503, { error: 'Google sign-in is not configured', code: 'google-unavailable' });
+    const body = await readBody(req);
+    if (!(await proveOwner(req, res, user, body, 'google-link'))) return;
+    if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
+    const result = google.begin(body.returnTo, { id: user.id, version: sessionVersion(user) });
+    await saveDb();
+    json(res, 200, { url: result.url }, { 'Set-Cookie': result.cookie });
+  },
+  'POST /api/auth/google/start': async (req, res) => {
+    if (!google.available) return json(res, 503, { error: 'Google sign-in is not configured', code: 'google-unavailable' });
+    const body = await readBody(req);
+    const result = google.begin(body.returnTo);
+    json(res, 200, { url: result.url }, { 'Set-Cookie': result.cookie });
+  },
+  'GET /api/auth/google/callback': async (req, res) => {
+    if (!google.available) return json(res, 503, { error: 'Google sign-in is not configured', code: 'google-unavailable' });
+    const result = await google.finish(req);
+    if (!result) return json(res, 400, { error: 'Invalid or expired sign-in transaction', code: 'google-state' });
+    let user = !result.error && db.users.find(u => u.google?.issuer === 'https://accounts.google.com' && u.google.subject === result.subject);
+    let error = result.error;
+    if (!error && result.link) {
+      const owner = readSession(req);
+      if (!owner || owner.id !== result.link.id || sessionVersion(owner) !== result.link.version) error = 'google-proof-expired';
+      else if ((user && user !== owner) || (owner.google && owner.google.subject !== result.subject)) error = 'google-conflict';
+      else if (result.link.proof) {
+        if (!owner.google || owner.google.subject !== result.subject || result.link.session !== sessionFingerprint(req)) error = 'google-proof-expired';
+        else {
+          for (const [key, value] of googleProofs) if (value.expires < Date.now()) googleProofs.delete(key);
+          if (googleProofs.size >= 1000) googleProofs.delete(googleProofs.keys().next().value);
+          const token = crypto.randomBytes(32).toString('base64url');
+          googleProofs.set(token, { uid: owner.id, version: sessionVersion(owner), session: sessionFingerprint(req), expires: Date.now() + 300000 });
+          res.writeHead(303, { Location: google.destination(result.returnTo), 'Cache-Control': 'no-store',
+            'Set-Cookie': [result.cookie, `${proofCookieName}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=300;${SECURE}`] });
+          return res.end();
+        }
+      }
+      else {
+        owner.google = { issuer: 'https://accounts.google.com', subject: result.subject };
+        user = owner;
+        await saveDb();
+        if (readSession(req) !== owner) error = 'google-proof-expired';
+        else audit(req, 'auth.google.link', { user: owner });
+      }
+    }
+    error ||= !user ? 'google-unlinked' : user.disabled ? 'disabled' : null;
+    audit(req, error ? 'auth.google.fail' : 'auth.google.ok', { ...(user ? { user } : {}), ok: !error });
+    res.writeHead(303, { Location: google.destination(result.returnTo, error), 'Cache-Control': 'no-store',
+      'Set-Cookie': error ? [result.cookie] : [result.cookie, ...sessionCookie(user)] });
+    res.end();
+  },
+  'GET /api/account/security': async (req, res) => {
+    const user = readSession(req);
+    if (!user) return json(res, 401, { error: 'not signed in' });
+    json(res, 200, {
+      google: { available: google.available, linked: !!user.google },
+      password: { available: PASSWORD_LOGIN, set: hasPassword(user) },
+      email: user.email || null, emailVerified: user.emailVerified === user.email && !!user.email,
+      pendingEmail: user.emailVerification?.exp > Date.now() ? user.emailVerification.email : null,
+      mailAvailable: mail.available,
+      passkeys: passkeyCount(user),
+      passkeyDetails: passkeyState(user).passkeys,
+    });
+  },
   // 503 rather than a flag in a 200: the container healthcheck is `wget --spider`, which reads
   // the status and nothing else, and an instance that cannot write its data directory is exactly
   // what "unhealthy" is for. The 200 keeps the shape it had, plus the flag it is now asserting.
@@ -1899,6 +2097,7 @@ const routes = {
       invite_only: INVITE_ONLY, allow_guest: ALLOW_GUEST,
       // Only when on, so an instance without passwords answers exactly as it did before (#118).
       ...(PASSWORD_LOGIN ? { password_login: true } : {}),
+      ...(google.available ? { google_login: true } : {}),
       // Public: the sign-in screen is the first thing that reads it.
       ...(DEFAULT_LANG ? { default_lang: DEFAULT_LANG } : {}),
       // Public like the two flags above: the caps are not a secret, and the absence of the

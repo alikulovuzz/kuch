@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({ answers: {}, sheets: [] }))
 vi.mock('../lib/api.js', () => ({
   api: path => {
     const key = path.split('?')[0]
+    if (mocks.answers[key] instanceof Error) return Promise.reject(mocks.answers[key])
     return key in mocks.answers ? Promise.resolve(mocks.answers[key]) : Promise.reject(new Error('not found'))
   }
 }))
@@ -22,13 +23,22 @@ vi.mock('../store/useStore.js', () => {
   useStore.getState = snap
   return { useStore }
 })
+
+it('hides previously loaded users after server authorization is revoked', async () => {
+  const page = render(<Admin />); await settle()
+  expect(page.textContent).toContain('Mallory')
+  mocks.answers['/api/admin/users'] = Object.assign(new Error('forbidden'), { status: 403 })
+  act(() => page.querySelector('[aria-label="refresh"]').click()); await settle()
+  expect(page.textContent).not.toContain('Mallory')
+  expect(page.textContent).toContain('Administrator access required')
+})
 vi.mock('../store/useUI.js', () => {
   const snap = () => ({ toast: () => {}, openSheet: render => mocks.sheets.push(render) })
   const useUI = selector => selector ? selector(snap()) : snap()
   useUI.getState = snap
   return { useUI }
 })
-vi.mock('react-router-dom', () => ({ useNavigate: () => () => {} }))
+vi.mock('react-router-dom', () => ({ useNavigate: () => () => {}, useBlocker: () => ({ state: 'unblocked' }) }))
 vi.mock('../sheets.jsx', () => ({ confirmSheet: vi.fn() }))
 vi.mock('./AdminCoach.jsx', () => ({ default: () => null }))
 
@@ -46,6 +56,7 @@ const settle = () => act(() => new Promise(r => setTimeout(r, 0)))
 const good = { id: 'w1', name: 'Push day', d: '2026-09-10', start: 1000, end: 61000, entries: [{ sets: [{ done: true }, { done: false }] }] }
 
 beforeEach(() => {
+  localStorage.clear()
   document.body.innerHTML = ''
   mocks.sheets.length = 0
   mocks.answers = {
@@ -63,7 +74,69 @@ beforeEach(() => {
 })
 afterEach(() => { act(() => { mounted.splice(0).forEach(root => root.unmount()) }) })
 
+it('offers section navigation and searches users by profile ID', async () => {
+  const page = render(<Admin />)
+  await settle()
+  expect(page.querySelector('nav[aria-label="Admin sections"]')).toBeTruthy()
+  const input = page.querySelector('input[aria-label="Search users"]')
+  expect(input).toBeTruthy()
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'missing')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(page.textContent).toContain('No matching users')
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'u1')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(page.querySelector('button.item')?.textContent).toContain('Mallory')
+})
+
+it('switches Admin language without losing the user search', async () => {
+  const page = render(<Admin />)
+  await settle()
+  const input = page.querySelector('input[aria-label="Search users"]')
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Mallory')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  const language = page.querySelector('select[aria-label="Admin language"]')
+  expect(language).toBeTruthy()
+  act(() => { language.value = 'ru'; language.dispatchEvent(new Event('change', { bubbles: true })) })
+  expect(page.querySelector('nav').textContent).toContain('Обзор')
+  expect(input.value).toBe('Mallory')
+  expect(localStorage.getItem('kuch.admin.language.adm')).toBe('ru')
+  const row = page.querySelector('button.item')
+  act(() => row.click())
+  const sheet = render(mocks.sheets[0](() => {})); await settle()
+  expect(sheet.textContent).toContain('Тренировки')
+})
+
+it('keeps a canonical admin link selectable when copying fails', async () => {
+  const page = render(<Admin />)
+  await settle()
+  const copy = [...page.querySelectorAll('button')].find(b => b.textContent === 'Copy admin link')
+  expect(copy).toBeTruthy()
+  const original = navigator.clipboard.writeText
+  navigator.clipboard.writeText = async () => { throw new Error('denied') }
+  try {
+    act(() => copy.click())
+    await settle()
+    expect(page.textContent).toContain('Copy failed. Select and copy the text.')
+    expect(page.querySelector('input[readonly]').value).toMatch(/\/#\/admin$/)
+  } finally { navigator.clipboard.writeText = original }
+})
+
 describe('Admin user drill-down', () => {
+  it('offers retry after the user detail request fails', async () => {
+    mocks.answers['/api/admin/user'] = new Error('Connection lost')
+    const page = render(<Admin />); await settle()
+    act(() => page.querySelector('button.item').click())
+    const sheet = render(mocks.sheets[0](() => {})); await settle()
+    expect(sheet.textContent).toContain('Connection lost')
+    expect(sheet.textContent).not.toContain('Loading…')
+    expect([...sheet.querySelectorAll('button')].some(b => b.textContent === 'Try again')).toBe(true)
+  })
   it('opens a profile with malformed workout entries and still offers "Disable account"', async () => {
     const page = render(<Admin />)
     await settle()

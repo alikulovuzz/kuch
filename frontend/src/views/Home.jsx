@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useAdminLanguage } from '../lib/admin-language.js'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { effectiveRoutines, effectiveRoutineIds, nextTrainingDay, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
@@ -18,6 +19,7 @@ import { dayNoteOf } from '../lib/day-notes.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
+  const { t: adminText } = useAdminLanguage()
   const nav = useNavigate()
   const S = useStore(s => s.S)
   const user = useStore(s => s.user)
@@ -101,6 +103,7 @@ export default function Home() {
   const onQueueStart = id => { if (S.active) nav('/workout'); else startFlow([id]) }
 
   return <div className="narrow">
+    {user?.admin && <button className="btn" onClick={() => nav('/admin')}>{adminText('Admin workspace')}</button>}
     <div className="hdr">
       <div><h1>{user ? t('Hi {0}', user.name) : 'Kuch'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label={trouble ? t('Settings') + ', ' + t('Connection problem') : t('Settings')}><Icon name="gear" />{trouble && <span className="tab-dot" aria-hidden="true" />}</button>
