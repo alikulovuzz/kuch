@@ -85,6 +85,10 @@ just means nobody has pressed the button.
 Merge requests still open on the GitLab mirror are reviewed too and land on `main` here. New work
 should come as a GitHub pull request.
 
+Merging a new upstream release into Kuch is its own procedure, with the brand check, the locale
+merge check and both api backends at fixed points: follow
+[docs/UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md) step by step.
+
 ## Good first issues
 
 - More starter plans

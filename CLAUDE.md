@@ -63,6 +63,11 @@ allowlisted with a reason in `scripts/brand-allowlist.json`), the frontend, api 
 locale checks, and building and booting both api image targets. `.github/workflows/docker-publish.yml` publishes the multi-arch images to
 `ghcr.io/alikulovuzz/kuch-{api,web}`.
 
+Upstream releases are merged by following `docs/UPSTREAM_SYNC.md`: a release tag (never upstream
+`main`) into a `sync/vX.Y.Z` branch, then the brand check, the locale merge check
+(`frontend/scripts/check-locale-merge.mjs`), both api backends and a PR on this fork. Upstream is a
+fetch-only remote: never push or open anything there.
+
 ## Architecture
 
 ### Frontend (`frontend/src`)

@@ -12,6 +12,10 @@
     "reason": "History: upstream's roadmap and milestones, kept as they were (Phase 1 inventory, #6)."
   },
   {
+    "path": "docs/UPSTREAM_SYNC.md",
+    "reason": "The upstream sync runbook: it names upstream's repository (the fetch-only remote, the one never to push to) and the five never-change internal keys by their real names (#70)."
+  },
+  {
     "path": "NOTICE.md",
     "reason": "Licence attribution: upstream's copyright and AGPL notice, the app-store clause, the catalogue attribution and the media licence, verbatim."
   },

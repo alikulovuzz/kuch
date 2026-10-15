@@ -1,6 +1,6 @@
 /* The storage boundary (docs/adr/0001-postgres-write-through-db.md, store/index.js): accounts and
    training documents are read and written only through the store, and every store call is
-   awaited. Upstream openGym still writes db.json and state-<uid>.json directly and synchronously,
+   awaited. Upstream still writes db.json and state-<uid>.json directly and synchronously,
    so a merged upstream change can add a storage call that conflicts with nothing: on Postgres it
    then reads or writes files nobody else looks at, or answers 200 before its write committed.
    Neither fails on the file backend. This test reads every API module as text and fails, naming
