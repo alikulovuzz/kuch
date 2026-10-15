@@ -17,6 +17,11 @@
     "reason":"The upstream sync runbook: it names upstream's repository (the fetch-only remote, the one never to push to) and the five never-change internal keys by their real names (#70)."
   },
   {
+    "path": "docs/agents/issue-tracker.md",
+    "match": "Never target upstream `DuarteSantos8/openGym`",
+    "reason": "The agents' issue-tracker guide names upstream's repository as the one never to file issues or PRs against, since gh in a fork clone may default to it (#50)."
+  },
+  {
     "path": "NOTICE.md",
     "reason": "Licence attribution: upstream's copyright and AGPL notice, the app-store clause, the catalogue attribution and the media licence, verbatim."
   },
