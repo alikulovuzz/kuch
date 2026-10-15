@@ -51,7 +51,9 @@ for _ in $(seq 1 60); do
 done
 
 echo "==> app on $ORIGIN"
-(cd "$ROOT/frontend" && exec node node_modules/vite/bin/vite.js --port "$WEB_PORT" --strictPort) &
+# --host: also reachable from other devices on the network (a phone), at the Network address Vite
+# prints. Passkeys need HTTPS or localhost, so over a LAN address use guest mode or PASSWORD_LOGIN=1.
+(cd "$ROOT/frontend" && exec node node_modules/vite/bin/vite.js --host --port "$WEB_PORT" --strictPort) &
 pids+=($!)
 
 wait -n
