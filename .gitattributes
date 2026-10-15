@@ -2,3 +2,5 @@
 # A CRLF checkout, the Windows default, turns "#!/bin/sh" into "#!/bin/sh\r" and the container
 # dies with "not found". Keep them LF everywhere.
 *.sh text eol=lf
+# Batch files are the other way round: cmd misreads some LF-only scripts, so keep them CRLF.
+*.cmd text eol=crlf
