@@ -74,7 +74,9 @@ it in review.
 </picture>
 </p>
 
-A pull request runs the three test suites and builds and boots both api image targets. The APK and
+A pull request runs the three test suites and builds and boots both api image targets. It also runs
+the brand check (`node scripts/check-brand.mjs`): a new upstream brand term must be renamed to Kuch,
+or added to `scripts/brand-allowlist.json` with the reason it stays. The APK and
 the published images come from GitLab CI on the mirror, built from `main` after the merge. If your
 change needs an APK to be judged, say so in the pull request and a maintainer will run that build.
 A first-time contributor's workflows wait for a maintainer to approve them, so "no checks yet"

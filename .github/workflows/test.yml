@@ -1,22 +1,11 @@
 # Runs on pull requests too — the other two workflows only fire on push to main, so
 # contributed changes used to reach main without anything ever having been run.
+# Every pull request, whatever it touches: the brand check (scripts/check-brand.mjs) has to see
+# a docs- or website-only change as much as a code one.
 name: Tests
 
 on:
   pull_request:
-    paths:
-      - 'frontend/**'
-      - 'api/**'
-      - 'mcp/**'
-      - 'scripts/build-coach-assets.mjs'
-      - 'scripts/build-coach-library.mjs'
-      - 'scripts/build-api-docs.mjs'
-      - 'website/api.html'
-      - 'api/coach/prompts/**'
-      - 'web/**'
-      - 'docker-compose.yml'
-      - '.env.example'
-      - '.github/workflows/test.yml'
   push:
     branches: [main, coach]
     paths:
@@ -26,6 +15,8 @@ on:
       - 'scripts/build-coach-assets.mjs'
       - 'scripts/build-coach-library.mjs'
       - 'scripts/build-api-docs.mjs'
+      - 'scripts/check-brand.mjs'
+      - 'scripts/brand-allowlist.json'
       - 'website/api.html'
       - 'api/coach/prompts/**'
       - 'web/**'
@@ -52,6 +43,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      # Every upstream brand term in the tracked files is allowlisted with a reason, or it fails
+      # (scripts/brand-allowlist.json). No dependencies, so it runs before npm ci and fails fast.
+      - run: node scripts/check-brand.mjs
       - run: npm ci
         working-directory: frontend
       - run: npm test
@@ -70,6 +64,32 @@ jobs:
       # Property probe over ~108k comparisons; too slow for the unit suite, cheap here.
       - run: npm run test:fatigue-probe
         working-directory: frontend
+      # Upstream sync branches only. A merge that took upstream's side of a locale conflict
+      # reverts the fork's translations, and check-locales above cannot see it: every key is still
+      # there. Each merge commit on the branch is checked against its own two parents, so the
+      # PR head and full history are needed rather than the shallow PR merge ref. Last in the job:
+      # this checkout moves the working tree, and clean: false keeps node_modules.
+      - if: startsWith(github.head_ref || github.ref_name, 'sync/')
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          clean: false
+      - name: locale merge check, every merge commit on the sync branch
+        if: startsWith(github.head_ref || github.ref_name, 'sync/')
+        working-directory: frontend
+        # --first-parent: the sync merge brings upstream's history in through its second parent,
+        # and upstream's own merges in there are not fork-vs-upstream merges. A sync branch
+        # always carries at least one merge, so finding none means something is off: fail.
+        run: |
+          git rev-parse --verify --quiet origin/main >/dev/null || { echo "origin/main was not fetched"; exit 1; }
+          merges=$(git rev-list --first-parent --merges --max-parents=2 origin/main..HEAD)
+          test -n "$merges" || { echo "No merge commit on this sync branch to check."; exit 1; }
+          status=0
+          for c in $merges; do
+            node scripts/check-locale-merge.mjs "$c" || status=1
+          done
+          exit $status
 
 
   mcp:

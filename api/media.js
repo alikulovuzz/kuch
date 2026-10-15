@@ -751,7 +751,7 @@ export function createMediaStore({ dir, limits, now = Date.now, readState = () =
           out.orphans++;
           if (!orphansLogged.has(name)) {
             orphansLogged.add(name);
-            log.warn(`media: uploads/${name} belongs to no profile in db.json — left alone`);
+            log.warn(`media: uploads/${name} belongs to no profile — left alone`);
           }
           continue;
         }
