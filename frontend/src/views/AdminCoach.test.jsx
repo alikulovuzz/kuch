@@ -168,9 +168,9 @@ describe('AdminCoach — loading and the env kill switch', () => {
     mocks.routes['/api/admin/coach'] = new Error('admin session expired')
     await mount()
     expect(mocks.toast).toHaveBeenCalledWith('admin session expired')
-    expect(host.textContent).toContain('Loading Coach status…')
+    expect(host.textContent).toContain('admin session expired')
     expect(master()).toBeFalsy()
-    expect([...host.querySelectorAll('button')]).toHaveLength(0)
+    expect(btn('Try again')).toBeTruthy()
   })
 
   it('COACH_DISABLED in the environment leaves no control on the screen — the switch is absent, not merely off', async () => {
@@ -184,13 +184,15 @@ describe('AdminCoach — loading and the env kill switch', () => {
 })
 
 describe('AdminCoach — the master switch (the only way the Coach is off for everyone)', () => {
-  it('"Set up the Coach" turns it on and re-reads the status, and is the only button on the off screen', async () => {
+  it('"Set up the Coach" starts an unsaved draft, then Save changes turns it on', async () => {
     mocks.routes['/api/admin/coach'] = status({ enabled: false })
     await mount()
     expect([...host.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Set up the Coach'])
 
     mocks.routes['/api/admin/coach'] = status({ enabled: true })
     await tap(btn('Set up the Coach'))
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')).toEqual([
       { path: '/api/admin/coach/config', method: 'POST', body: { enabled: true } }
     ])
@@ -199,10 +201,12 @@ describe('AdminCoach — the master switch (the only way the Coach is off for ev
     expect(master()).toBeTruthy()
   })
 
-  it('switching it off posts enabled:false and the whole wizard disappears with it', async () => {
+  it('switching it off drafts enabled:false until Save changes', async () => {
     await mount()
     mocks.routes['/api/admin/coach'] = status({ enabled: false })
     await tap(master())
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ enabled: false })
     expect(host.textContent).toContain('nobody sees it anywhere in the app')
     expect(host.querySelector('.adm-step')).toBeFalsy()
@@ -213,8 +217,10 @@ describe('AdminCoach — the master switch (the only way the Coach is off for ev
     expect(master().getAttribute('aria-checked')).toBe('true')
     mocks.routes['/api/admin/coach/config'] = new Error('config file is read-only')
     await tap(master())
+    expect(mocks.toast).not.toHaveBeenCalled()
+    await tap(btn('Save changes'))
     expect(mocks.toast).toHaveBeenCalledWith('config file is read-only')
-    expect(master().getAttribute('aria-checked')).toBe('true')
+    expect(host.textContent).toContain('Save changes')
     // A failed write must not trigger a re-read that could look like success.
     expect(sent('/api/admin/coach')).toHaveLength(1)
   })
@@ -273,6 +279,13 @@ describe('AdminCoach — removing the stored credential (irreversible: the key i
 })
 
 describe('AdminCoach — switching provider', () => {
+  it('does not save a provider selection until Save changes is pressed', async () => {
+    await mount()
+    await tap(chip('OpenAI-compatible'))
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
+    await tap(btn('Save changes'))
+    expect(sent('/api/admin/coach/config').at(-1).body).toEqual({ provider: 'compatible' })
+  })
   it('posts the chip\'s provider id and drops the previous test result with it', async () => {
     await mount()
     await tap(btn('Test the Coach'))
@@ -280,6 +293,7 @@ describe('AdminCoach — switching provider', () => {
 
     mocks.routes['/api/admin/coach'] = status({ provider: 'openai', model: 'gpt-4o' })
     await tap(chip('OpenAI-compatible'))
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config').at(-1).body).toEqual({ provider: 'compatible' })
     // A "Passed" banner from the provider you just switched away from would be a lie.
     expect(host.querySelector('.adm-result')).toBeFalsy()
@@ -343,7 +357,7 @@ describe('AdminCoach — the connection test', () => {
 })
 
 describe('AdminCoach — endpoint', () => {
-  it('a changed base URL is written on blur; an unchanged one writes nothing', async () => {
+  it('a changed base URL is written on Save; an unchanged one writes nothing', async () => {
     mocks.routes['/api/admin/coach'] = status({ provider: 'compatible', baseUrl: 'http://ollama:11434', model: null, auth: { state: 'optional' } })
     await mount()
     const field = [...host.querySelectorAll('input.field')][0]
@@ -353,6 +367,7 @@ describe('AdminCoach — endpoint', () => {
     expect(sent('/api/admin/coach/config')).toHaveLength(0)
 
     await blurWith(field, 'http://lan-gpu:8000')
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')).toEqual([
       { path: '/api/admin/coach/config', method: 'POST', body: { baseUrl: 'http://lan-gpu:8000' } }
     ])
@@ -363,6 +378,7 @@ describe('AdminCoach — endpoint', () => {
     mocks.routes['/api/admin/coach/config'] = new Error('endpoint must not contain a path')
     await mount()
     await blurWith([...host.querySelectorAll('input.field')][0], 'http://ollama:11434/v1')
+    await tap(btn('Save changes'))
     expect(mocks.toast).toHaveBeenCalledWith('endpoint must not contain a path')
     expect(host.textContent).toContain('http://ollama:11434')
   })
@@ -380,6 +396,7 @@ describe('AdminCoach — model', () => {
     await mount()
     const select = host.querySelector('select.adm-select')
     await pick(select, 'claude-haiku-4')
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')).toEqual([
       { path: '/api/admin/coach/config', method: 'POST', body: { model: 'claude-haiku-4' } }
     ])
@@ -389,6 +406,7 @@ describe('AdminCoach — model', () => {
     mocks.routes['/api/admin/coach'] = status({ knownModels: ['claude-haiku-4', 'claude-sonnet-4'], models: { anthropic: 'claude-haiku-4' }, model: 'claude-haiku-4' })
     await mount()
     await pick(host.querySelector('select.adm-select'), '')
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ model: '' })
   })
 
@@ -423,6 +441,7 @@ describe('AdminCoach — model', () => {
     // blurring it does not write the default in as an explicit choice.
     expect(field.value).toBe('')
     await blurWith(field, 'claude-haiku-4')
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ model: 'claude-haiku-4' })
   })
 
@@ -469,6 +488,7 @@ describe('AdminCoach — daily caps (what bounds the spend on the operator\'s ac
   it('changing the per-user cap sends BOTH caps, so the other one is not dropped by the merge', async () => {
     await mount()
     await blurWith(capFields()[0], '12')
+    await tap(btn('Save usage limits'))
     expect(sent('/api/admin/coach/config')).toEqual([
       { path: '/api/admin/coach/config', method: 'POST', body: { caps: { perProfileDaily: 12, instanceDaily: 50 } } }
     ])
@@ -477,6 +497,7 @@ describe('AdminCoach — daily caps (what bounds the spend on the operator\'s ac
   it('changing the instance cap likewise carries the per-user one through untouched', async () => {
     await mount()
     await blurWith(capFields()[1], '400')
+    await tap(btn('Save usage limits'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ caps: { perProfileDaily: 5, instanceDaily: 400 } })
   })
 
@@ -491,27 +512,32 @@ describe('AdminCoach — daily caps (what bounds the spend on the operator\'s ac
   // clicking away wrote 0: the daily cap on the operator's API key, gone in one blur with no
   // confirmation and no toast. An empty box is no change now, the stored value comes back into
   // it, and removing the cap takes typing an explicit 0.
-  it('emptying a cap box writes nothing and puts the stored value back', async () => {
+  it('keeps an empty cap draft and refuses to save it as unlimited', async () => {
     await mount()
     await blurWith(capFields()[0], '')
     expect(sent('/api/admin/coach/config')).toHaveLength(0)
-    expect(capFields()[0].value).toBe('5')
+    expect(capFields()[0].value).toBe('')
     await blurWith(capFields()[1], '   ')
     expect(sent('/api/admin/coach/config')).toHaveLength(0)
-    expect(capFields()[1].value).toBe('50')
+    expect(capFields()[1].value).toBe('')
+    await tap(btn('Save usage limits'))
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
   })
 
   it('an explicit 0 still removes the cap, because that is what the hint promises', async () => {
     await mount()
     await blurWith(capFields()[0], '0')
+    await tap(btn('Save usage limits'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ caps: { perProfileDaily: 0, instanceDaily: 50 } })
   })
 
-  it('the community-medians switch is a separate write and does not carry the caps with it', async () => {
+  it('the community-medians switch joins the configuration draft and does not carry the caps with it', async () => {
     await mount()
     const switches = [...host.querySelectorAll('[role="switch"]')]
     expect(switches).toHaveLength(2)
     await tap(switches[1])
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ community: true })
   })
 })
@@ -681,17 +707,17 @@ describe('AdminCoach — what the card refuses to show', () => {
       ],
     })
     await mount()
-    expect(host.textContent).toContain('just now')
-    expect(host.textContent).toContain('added 3 d ago')
+    expect(host.textContent).toContain('30 seconds ago')
+    expect(host.textContent).toContain('added 3 days ago')
     const rows = [...host.querySelectorAll('.adm-log-row')].map(r => r.textContent)
-    expect(rows[0]).toContain('5 min ago')
-    expect(rows[1]).toContain('3 h ago')
+    expect(rows[0]).toContain('5 minutes ago')
+    expect(rows[1]).toContain('3 hours ago')
     expect(rows[1]).not.toContain(' s')    // ms: 0 must not print "0 s"
 
     mocks.routes['/api/admin/coach'] = status({ lastSuccess: null })
     act(() => { root.render(<AdminCoach key="again" />) })
     await settle()
-    expect(host.textContent).toContain('never')
+    expect(host.textContent).toContain('Never')
   })
 
   it('names which KIND of credential is filed, not just that one is', async () => {
@@ -753,7 +779,7 @@ describe('AdminCoach — what the card refuses to show', () => {
 describe('AdminCoach — readiness and the step count', () => {
   it('a reachable, credentialed, enabled provider reads ready', async () => {
     await mount()
-    expect(host.querySelector('.adm-pill').textContent).toBe('ready')
+    expect(host.querySelector('[role="status"][aria-label="Status"]').textContent).toBe('ready')
     expect(host.textContent).toContain('On · Claude · claude-sonnet-4')
     expect(host.querySelector('.adm-progress')).toBeFalsy()
   })
@@ -761,7 +787,7 @@ describe('AdminCoach — readiness and the step count', () => {
   it('an unreachable runtime reads not ready and points at the Test step', async () => {
     mocks.routes['/api/admin/coach'] = status({ runtime: { ok: false, version: null, error: 'connect ECONNREFUSED', needsKey: false } })
     await mount()
-    expect(host.querySelector('.adm-pill').textContent).toBe('not ready')
+    expect(host.querySelector('[role="status"][aria-label="Status"]').textContent).toBe('not ready')
     expect(host.textContent).toContain('the provider can’t be reached')
     expect(host.textContent).toContain('connect ECONNREFUSED')
   })

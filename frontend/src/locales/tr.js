@@ -2242,4 +2242,5 @@ export default {
   'Your sports watch, calling you back.': 'Spor saatin seni geri çağırıyor.',
   'Coach wants you back on the bar.': 'Koç seni bara geri bekliyor.',
   'Gentle, for headphones or a quiet room.': 'Sakin, kulaklık ya da sessiz bir oda için.',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "Bu geçiş anahtarını kaldırmak diğer tüm cihazlardaki oturumunuzu kapatır. Eşleştirilmiş telefonlar yeniden eşleştirilmelidir.",
 }

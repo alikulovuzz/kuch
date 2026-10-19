@@ -137,7 +137,7 @@ function Sheet({ sheet }) {
   return (
     <div>
       <div className="mback" onClick={() => { if (!sheet.locked) close() }} />
-      <div className="sheet" ref={ref} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+      <div className={'sheet' + (sheet.kind === 'admin-detail' ? ' admin-detail-sheet' : '')} ref={ref} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
         onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
         <div className="grab" />
         {sheet.render(close)}

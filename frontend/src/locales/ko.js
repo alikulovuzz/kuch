@@ -2242,4 +2242,5 @@ export default {
   'Your sports watch, calling you back.': '스포츠 시계가 다시 부르고 있어요.',
   'Coach wants you back on the bar.': '코치가 바 앞으로 돌아오래요.',
   'Gentle, for headphones or a quiet room.': '이어폰이나 조용한 곳에 어울려요.',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "이 패스키를 삭제하면 다른 모든 기기에서 로그아웃됩니다. 연결된 휴대전화는 다시 연결해야 합니다.",
 }

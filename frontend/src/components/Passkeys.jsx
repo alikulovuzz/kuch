@@ -9,6 +9,7 @@ import { useUI } from '../store/useUI.js'
 import { t, tn } from '../lib/i18n.js'
 import { dateLocale } from '../lib/i18n-core.js'
 import { api, webauthnOK, createPasskey } from '../lib/api.js'
+import { acceptSession } from '../lib/remote.js'
 import { copyText } from '../lib/clipboard.js'
 import { deviceLinkUrl, deviceLabel } from '../lib/device-link.js'
 import { askAddDeviceData } from '../sheets.jsx'
@@ -142,11 +143,10 @@ function PasskeySheet({ passkey, title, state, close, done }) {
 /* Removing one asks for the proof adding one does (proveOwner in api/server.js): a copied
    session must not choose which of the owner's passkeys is left. The proof is the confirmation,
    so it is asked on the sheet that says what removing means; any passkey of the profile may give
-   it, this one included. Removing does not end a session the passkey opened — sessions are not
-   tied to one (api/server.js) — which the sheet says, with the way to do that. */
+   it, this one included. Removing revokes other browser and paired-mobile sessions. */
 function RemovePasskeySheet({ passkey, title, state, close, done }) {
   const remove = async proof => {
-    const r = await api('/api/account/passkeys?id=' + encodeURIComponent(passkey.id), { method: 'DELETE', body: JSON.stringify(proof) })
+    const r = await acceptSession(await api('/api/account/passkeys?id=' + encodeURIComponent(passkey.id), { method: 'DELETE', body: JSON.stringify(proof) }))
     close(); done(r)
     toast(t('Passkey removed'))
   }
@@ -154,7 +154,7 @@ function RemovePasskeySheet({ passkey, title, state, close, done }) {
     <h3>{t('Remove this passkey?')}</h3>
     <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>{title}</div>
     <div className="muted small" style={{ marginBottom: 6 }}>
-      {t('It can no longer sign in to this profile. A device already signed in with it stays signed in. If it was lost, use Sign out everywhere.')}
+      {t('Removing this passkey signs you out everywhere else. Paired phones must be paired again.')}
     </div>
     <div className="dim small" style={{ marginBottom: 14 }}>{t('First confirm that it is you.')}</div>
     <ProveOwner passkey password={state.password} explain={passkeyError} danger submitText={t('Remove')} onProof={remove} />

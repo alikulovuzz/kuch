@@ -13,6 +13,7 @@ import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
 import { dateLocale } from '../lib/i18n-core.js'
 import { api, webauthnOK, passkeyAssertion, passwordLogin, passwordRegister, passwordResetRedeem } from '../lib/api.js'
+import { acceptSession } from '../lib/remote.js'
 import { askAddDeviceData } from '../sheets.jsx'
 import { Row, Button } from './ui.jsx'
 
@@ -346,7 +347,7 @@ export function PasswordSheet({ status, close, done }) {
     setBusy(true); setErr(null)
     try {
       const proof = withPasskey ? await passkeyAssertion() : { current }
-      await api('/api/account/password', { method: 'POST', body: JSON.stringify({ next, ...proof }) })
+      await acceptSession(await api('/api/account/password', { method: 'POST', body: JSON.stringify({ next, ...proof }) }))
       close(); done()
       toast(t('Password saved. You’re now signed out everywhere else.'))
     } catch (e) { if (!dismissed(e)) setErr(passwordError(e)) }
@@ -394,7 +395,7 @@ export function PasswordSheet({ status, close, done }) {
    stays), and the password counts here: this row exists only while the instance takes them. */
 function RemovePasswordSheet({ status, close, done }) {
   const remove = async proof => {
-    await api('/api/account/password', { method: 'DELETE', body: JSON.stringify(proof) })
+    await acceptSession(await api('/api/account/password', { method: 'DELETE', body: JSON.stringify(proof) }))
     close(); done()
     toast(t('Password removed'))
   }

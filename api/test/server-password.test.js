@@ -438,7 +438,7 @@ test('the last way in is never removed', async t => {
   assert.equal((await h.db()).users.find(u => u.id === 'u2').pw, undefined);
   assert.ok(h.audit().some(e => e.ev === 'auth.password.remove' && e.uid === 'u2'));
   // Nothing left to remove: the same answer, no proof needed.
-  assert.equal((await h.req('DELETE', '/api/account/password', { body: {}, cookie: `gymsid=${mintSession('u2')}`, ip })).status, 200);
+  assert.equal((await h.req('DELETE', '/api/account/password', { body: {}, cookie: both.cookie, ip })).status, 200);
 });
 
 // A stolen cookie must not take away the password that signs the owner in where passkeys do not
@@ -481,8 +481,9 @@ test('removing the password needs proof made for it: the password itself or a pa
   assert.equal((await h.db()).users[0].pw, undefined);
   assert.equal((await login(h, 'Ana', GOOD, ip)).status, 401);
   assert.ok(h.audit().some(e => e.ev === 'auth.password.remove' && e.uid === 'u1'));
-  // Existing sessions are left alone.
-  assert.equal((await h.req('GET', '/api/me', { cookie, ip })).status, 200);
+  // Other sessions end, while the renewed current session carries on.
+  assert.equal((await h.req('GET', '/api/me', { cookie, ip })).status, 401);
+  assert.equal((await h.req('GET', '/api/me', { cookie: r.cookie, ip })).status, 200);
 });
 
 test('wrong passwords given to remove the password count toward the same pause as wrong sign-ins', async t => {

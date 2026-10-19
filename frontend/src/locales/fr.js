@@ -2242,4 +2242,5 @@ export default {
   'Your sports watch, calling you back.': 'Ta montre de sport te rappelle.',
   'Coach wants you back on the bar.': 'Le coach te veut de retour à la barre.',
   'Gentle, for headphones or a quiet room.': 'Tout doux, pour un casque ou une pièce calme.',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "Supprimer cette clé d’accès vous déconnecte de tous les autres appareils. Les téléphones associés devront être associés à nouveau.",
 }

@@ -2242,4 +2242,5 @@ export default {
   'Your sports watch, calling you back.': '你的运动手表在叫你回来。',
   'Coach wants you back on the bar.': '教练等你回到杠铃前。',
   'Gentle, for headphones or a quiet room.': '轻柔，适合耳机或安静的房间。',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "移除此通行密钥后，你会从所有其他设备退出登录。已配对的手机必须重新配对。",
 }

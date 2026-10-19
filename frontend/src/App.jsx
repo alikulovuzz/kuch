@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } from 'react-router-dom'
+import { createHashRouter, RouterProvider, Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { bindUI } from './components/ui.jsx'
@@ -42,6 +42,8 @@ import StructuralBalance from './views/StructuralBalance.jsx'
 import ProgressPhotos from './views/ProgressPhotos.jsx'
 import { SettingsRoute } from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
+import AdminAccess from './views/AdminAccess.jsx'
+import AdminSignIn from './views/AdminSignIn.jsx'
 import CoachChat from './views/CoachChat.jsx'
 import Measurements from './views/Measurements.jsx'
 import CoachIntake from './views/CoachIntake.jsx'
@@ -80,6 +82,11 @@ function Shell() {
   // native side as an alarm (#375). buzzAsAlarm answers false off Android, so iOS buzzes as before.
   useEffect(() => { setAlarmBuzzer(MOBILE && S.vibrate !== false && S.vibrateOnSilent ? buzzAsAlarm : null) }, [S.vibrate, S.vibrateOnSilent])
   const isGuest = useStore(s => s.isGuest())
+  const adminDesign = loc.pathname === '/admin' || (!user && !isGuest)
+  useLayoutEffect(() => {
+    document.body.classList.toggle('admin-design', adminDesign)
+    return () => document.body.classList.remove('admin-design')
+  }, [adminDesign])
   const needsMobileOnboarding = useStore(s => s.needsMobileOnboarding)
   const langV = useLang()   // re-renders the whole shell when the language (pack) changes
   useEffect(() => { setNav(navigate) }, [navigate])
@@ -185,7 +192,7 @@ function Shell() {
   }, [inWorkout])
   // The chat owns the bottom of the screen as well: its composer sits where the tabs would be.
   // The first-launch card has no tabs either: they changed the route behind it.
-  const noTabs = inWorkout || loc.pathname === '/coach' || needsMobileOnboarding
+  const noTabs = inWorkout || loc.pathname === '/admin' || loc.pathname === '/coach' || needsMobileOnboarding
 
   const authed = user || isGuest
   if (!ready && !authed) return (
@@ -200,9 +207,9 @@ function Shell() {
     <>
       {/* keyed on the route: a view that throws is contained, and switching tabs
           re-mounts the boundary, so the tab bar is always a way out */}
-      <div id="app" className="vfade" key={loc.pathname}>
+      <div id="app" className={'vfade' + (loc.pathname === '/admin' ? ' admin-page' : '') + (adminDesign ? ' auth-design' : '')} key={loc.pathname}>
         <ErrorBoundary>
-          {!authed ? <Login /> : needsMobileOnboarding ? <MobileOnboarding /> : (
+          {loc.pathname === '/admin' && (!authed || /(?:^|[?&])action=(verify|reset)(?:&|$)/.test(loc.search)) ? <AdminSignIn /> : !authed ? <Login /> : needsMobileOnboarding ? <MobileOnboarding /> : (
             <Routes>
               <Route path="/home" element={<Home />} />
               {/* Gym check-in — switched off in Settings, the route falls through to the
@@ -227,7 +234,7 @@ function Shell() {
               <Route path="/coach/intake" element={<CoachIntake />} />
               <Route path="/coach/proposal" element={<Navigate to="/coach" replace />} />
               <Route path="/coach/setup" element={<CoachSetup />} />
-              <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
+              <Route path="/admin" element={user?.admin ? <Admin /> : <AdminAccess />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           )}
@@ -246,6 +253,8 @@ function Shell() {
   )
 }
 
+const router = createHashRouter([{ path: '*', element: <Shell /> }])
+
 export default function App() {
   const boot = useStore(s => s.boot)
   useEffect(() => { boot() }, [boot])
@@ -255,5 +264,5 @@ export default function App() {
     initBackButton().then(fn => { if (gone) fn(); else stop = fn })
     return () => { gone = true; stop?.() }
   }, [])
-  return <HashRouter><Shell /></HashRouter>
+  return <RouterProvider router={router} />
 }

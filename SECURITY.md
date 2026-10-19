@@ -89,7 +89,7 @@ Read this before hosting Kuch for anyone other than yourself.
 
 ### What it does
 
-- **Passkeys by default.** No email addresses, no email reset flow. Registration and login are
+- **Passkeys by default.** Registration and login are
   verified server-side by `@simplewebauthn/server` against `expectedOrigin: ORIGIN` and
   `expectedRPID: RP_ID`, and the authenticator's signature counter is stored and updated on every
   login (the `POST /api/register/verify` and `POST /api/login/verify` handlers in `api/server.js`).
@@ -131,10 +131,13 @@ Read this before hosting Kuch for anyone other than yourself.
   can pause them — not even behind a proxy that shows the API one address for every visitor. The address is the socket peer unless
   `TRUST_PROXY=1` (set by the bundled compose file, where only the web container reaches the
   API), and IPv6 is counted per /64 (`api/rate-limit.js`).
-- **A sign-in e-mail is an identifier, never a channel.** With `PASSWORD_LOGIN=1` a profile may add
-  an e-mail address to type at the password sign-in instead of its name. Nothing is ever sent to it
-  (there is no mail server): no verification, no reset mail, so it is not proven to be anyone's
-  and grants nothing on its own — the password still does. Adding, changing and removing it take
+- **A sign-in e-mail can be verified for recovery.** With `PASSWORD_LOGIN=1` a profile may add
+  an e-mail address to type at the password sign-in instead of its name. Existing unverified
+  addresses still work for login but cannot receive recovery mail. When SMTP is configured, a
+  signed-in owner may request verification; the old address remains in use until the new address
+  is verified with a single-use link valid for 24 hours. Verified addresses can receive a
+  single-use password recovery link valid for 30 minutes. Recovery revokes existing sessions.
+  Adding, changing and removing an address take
   the same proof as a password (`proveOwner`). It is folded like a name (NFKC, trimmed,
   lower-cased; at most 254 characters), unique across profiles and never another password
   holder's name, so an identifier never points at two accounts. Taking one in use answers `409
@@ -254,18 +257,18 @@ Read this before hosting Kuch for anyone other than yourself.
   `requireUserVerification: false` (the `POST /api/register/verify` and `POST /api/login/verify`
   handlers), so a passkey released without a biometric or PIN is still accepted. In practice:
   unlocked device ≈ account access.
-- **Recovery is another passkey, or an admin.** A profile can hold several passkeys, and a
-  signed-in device can give a new one its own with a device code; there is no email path. Lose
-  every passkey (and every signed-in device) and that profile is unreachable — unless the
-  instance runs `PASSWORD_LOGIN=1`, where an admin can issue a reset code that sets a password on
-  it. Without that, only direct surgery on `./data` gets it back.
-- **A device code is a capability, and removing a passkey does not end sessions.** Anyone who
+- **Recovery uses a backup sign-in method or an operator.** A profile can hold several passkeys,
+  and a signed-in device can give a new one its own with a device code. A verified login email
+  provides password recovery when SMTP and password login are enabled. An administrator can issue
+  a one-time reset code for another profile. An operator with storage access can restore the
+  existing administrator through the offline procedure in `docs/ADMIN_AUTH.md`.
+- **A device code is a capability, and removing a passkey revokes other sessions.** Anyone who
   reads a code off the screen within its ten minutes can add a passkey to that profile; the owner
   sees it in Settings → Passkeys and can remove it. The instance's activity log records it as
   `auth.link.ok`, but only an admin can read that log.
-  Sessions are `uid:expiry:version` and are not tied to the passkey that opened them, so removing
-  a passkey stops it signing in and drops an unused device code, but leaves any session it
-  opened running; "sign out everywhere" ends those.
+  Sessions are `uid:expiry:version` and are not tied to the passkey that opened them. Removing
+  a passkey increments the version, disconnects paired phones and unused device codes, and renews
+  only the current browser session. "Sign out everywhere" ends that one too.
 - **A password is weaker than a passkey, and the throttle is per process.** It can be phished,
   reused elsewhere or guessed; a stolen `db.json` allows offline guessing against the scrypt
   hashes. The throttle's counters live in memory: a restart clears them, and several API replicas

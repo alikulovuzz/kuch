@@ -19,8 +19,8 @@ export function normalizeServerUrl(raw) {
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : 'https://' + s
   try {
     const u = new URL(withScheme)
-    if (!u.hostname) return null
-    return u.origin
+    if (!u.hostname || !['http:', 'https:'].includes(u.protocol) || u.username || u.password) return null
+    return u.origin + u.pathname.replace(/\/+$/, '')
   } catch (e) { return null }
 }
 
@@ -46,6 +46,14 @@ export async function forgetRemote() {
 export async function renewToken(remote, token) {
   setRemoteAuth(remote.base, token)
   await saveRemoteFile({ ...remote, token })
+}
+
+// Account security mutations replace the current mobile session as they revoke others.
+export async function acceptSession(result) {
+  if (!result?.token) return result
+  const remote = await loadRemote()
+  if (remote?.mode === 'remote') await renewToken(remote, result.token)
+  return result
 }
 
 // Redeems the pairing code, wires api.js at the resolved base, and persists the connection so

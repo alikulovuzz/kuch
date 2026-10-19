@@ -117,14 +117,14 @@ export const needsRehash = stored => {
 export const nameKey = name => String(name || '').normalize('NFKC').trim().toLowerCase();
 
 /* ------------------------------------------------------------------ e-mail ----------------
-   An optional second name to sign in with. Nothing is ever sent to it — no verification, no
-   reset mail; an admin's code stays the only reset — so it is only ever compared, the way a name
-   is: the same fold as nameKey() (NFKC, trimmed, lower-cased). Lower-casing the local part is
+   An optional second name to sign in with. Legacy unverified addresses remain usable for login,
+   while only verified addresses receive recovery mail. It uses the same fold as nameKey()
+   (NFKC, trimmed, lower-cased). Lower-casing the local part is
    stricter than RFC 5321 allows, and what every mail provider people actually use does anyway;
    two profiles on one instance told apart only by the case of their address is not a thing
    worth supporting. The syntax check is deliberately loose — one "@", something before it, a
-   dotted domain after it, no spaces or brackets — because nothing here delivers mail and a
-   stricter rule would only refuse real addresses. 254 is the longest address SMTP can carry. */
+   dotted domain after it, no spaces or brackets. Delivery still depends on the configured SMTP
+   server. 254 is the longest address SMTP can carry. */
 export const EMAIL_MAX = 254;
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"]{1,64}@(?=.{1,253}$)[^\s@<>()[\]\\,;:"._-][^\s@<>()[\]\\,;:"]*\.[^\s@<>()[\]\\,;:".]{2,}$/u;
 /** The stored form of an address, or null when it is not one. */
