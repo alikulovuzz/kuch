@@ -82,6 +82,11 @@ function Shell() {
   // native side as an alarm (#375). buzzAsAlarm answers false off Android, so iOS buzzes as before.
   useEffect(() => { setAlarmBuzzer(MOBILE && S.vibrate !== false && S.vibrateOnSilent ? buzzAsAlarm : null) }, [S.vibrate, S.vibrateOnSilent])
   const isGuest = useStore(s => s.isGuest())
+  const adminDesign = loc.pathname === '/admin' || (!user && !isGuest)
+  useLayoutEffect(() => {
+    document.body.classList.toggle('admin-design', adminDesign)
+    return () => document.body.classList.remove('admin-design')
+  }, [adminDesign])
   const needsMobileOnboarding = useStore(s => s.needsMobileOnboarding)
   const langV = useLang()   // re-renders the whole shell when the language (pack) changes
   useEffect(() => { setNav(navigate) }, [navigate])
@@ -202,7 +207,7 @@ function Shell() {
     <>
       {/* keyed on the route: a view that throws is contained, and switching tabs
           re-mounts the boundary, so the tab bar is always a way out */}
-      <div id="app" className={'vfade' + (loc.pathname === '/admin' ? ' admin-page' : '')} key={loc.pathname}>
+      <div id="app" className={'vfade' + (loc.pathname === '/admin' ? ' admin-page' : '') + (adminDesign ? ' auth-design' : '')} key={loc.pathname}>
         <ErrorBoundary>
           {loc.pathname === '/admin' && (!authed || /(?:^|[?&])action=(verify|reset)(?:&|$)/.test(loc.search)) ? <AdminSignIn /> : !authed ? <Login /> : needsMobileOnboarding ? <MobileOnboarding /> : (
             <Routes>

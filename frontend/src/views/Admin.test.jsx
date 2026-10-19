@@ -78,6 +78,7 @@ it('offers section navigation and searches users by profile ID', async () => {
   const page = render(<Admin />)
   await settle()
   expect(page.querySelector('nav[aria-label="Admin sections"]')).toBeTruthy()
+  act(() => page.querySelector('.adm-panel-head button').click())
   const input = page.querySelector('input[aria-label="Search users"]')
   expect(input).toBeTruthy()
   act(() => {
@@ -95,6 +96,7 @@ it('offers section navigation and searches users by profile ID', async () => {
 it('switches Admin language without losing the user search', async () => {
   const page = render(<Admin />)
   await settle()
+  act(() => page.querySelector('.adm-panel-head button').click())
   const input = page.querySelector('input[aria-label="Search users"]')
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Mallory')
@@ -110,6 +112,23 @@ it('switches Admin language without losing the user search', async () => {
   act(() => row.click())
   const sheet = render(mocks.sheets[0](() => {})); await settle()
   expect(sheet.textContent).toContain('Тренировки')
+})
+
+it('pages through users and starts from the first page after searching', async () => {
+  mocks.answers['/api/admin/users'].users = Array.from({ length: 56 }, (_, index) => ({ id: 'u' + index, name: 'Member ' + index, workouts: 0, disabled: false }))
+  const page = render(<Admin />); await settle()
+  act(() => page.querySelector('.adm-panel-head button').click())
+  expect(page.querySelectorAll('button.item')).toHaveLength(25)
+  act(() => [...page.querySelectorAll('.adm-pagination button')].find(button => button.textContent === 'Next').click())
+  expect(page.querySelector('button.item').textContent).toContain('Member 25')
+  const input = page.querySelector('input[aria-label="Search users"]')
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Member 1')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(page.querySelectorAll('button.item')).toHaveLength(11)
+  expect(page.querySelector('button.item').textContent).toContain('Member 1')
+  expect(page.querySelector('.adm-pagination')).toBeNull()
 })
 
 it('keeps a canonical admin link selectable when copying fails', async () => {

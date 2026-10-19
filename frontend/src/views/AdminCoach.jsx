@@ -45,7 +45,7 @@ export function parseHeadersText(text) {
 const RUNTIME_IDS = ['claude', 'codex']
 const TESTING_IDS = ['fixture']
 
-export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
+export default function AdminCoach({ tick = 0, onDirty = () => {}, onStatus = () => {} }) {
   const { locale, t, number, relative: rel } = useAdminLanguage()
   const seconds = ms => new Intl.NumberFormat(locale, { style: 'unit', unit: 'second', unitDisplay: 'short' }).format(Math.round(ms / 1000))
   const toast = useUI(s => s.toast)
@@ -69,7 +69,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
   // that once per boot, and the Plan tab's Coach card hangs off it: without the re-read, an admin
   // who has just switched the Coach on and connected it finds no Coach anywhere until a reload,
   // which reads as a setup that failed (Discord #install-help, 2026-09-19).
-  const load = () => api('/api/admin/coach').then(r => { setD(r); setLoadError(''); setModels(r.knownModels || null); useStore.getState().refreshConfig() }).catch(e => { setLoadError(adminError(e)); toast(t(adminError(e))) })
+  const load = () => api('/api/admin/coach').then(r => { setD(r); onStatus(r); setLoadError(''); setModels(r.knownModels || null); useStore.getState().refreshConfig() }).catch(e => { setLoadError(adminError(e)); toast(t(adminError(e))) })
   useEffect(() => { load() }, [tick])
   useEffect(() => { onDirty(!!Object.keys(draft).length || !!capsDraft || headersDraft !== null || credentialDirty) }, [draft, capsDraft, headersDraft, credentialDirty])
 
@@ -209,22 +209,16 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
     </div>
   </div>
 
-  return <div className="card" style={{ borderColor: live ? 'var(--acc)' : undefined }}>
+  return <div className="adm-coach">
     {loadError && <p role="alert">{t(loadError)} <button onClick={load}>{t("Try again")}</button></p>}
-    <div className="adm-actions">
-      <Button variant="primary" disabled={busy || (!Object.keys(draft).length && headersDraft === null)} onClick={() => save(draft)}>{t("Save changes")}</Button>
-      <Button variant="tinted" disabled={busy || !capsDraft} onClick={() => save({ caps: capsDraft })}>{t("Save usage limits")}</Button>
-    </div>
     {providerPending && <p role="status">{t('Save the provider selection before editing credentials or listing models.')}</p>}
-    <div className="row between" style={{ marginBottom: 2 }}>
-      <h2 style={{ margin: 0 }}>{t("AI Coach")}</h2>
+    <div className="adm-coach-heading">
+      <h2>{t('Setup')}</h2><label><span>{t('AI Coach')}</span>
       <Switch checked={!!d.enabled} disabled={busy} onChange={v => patch({ enabled: v })} />
+      </label>
     </div>
-    <div className="adm-status">
-      <span className={'adm-pill ' + (live ? 'ok' : 'warn')}>{live ? t("ready") : t("not ready")}</span>
-      <span>{status}</span>
-    </div>
-    {!live && <div className="adm-progress" aria-hidden="true"><i style={{ width: Math.round(doneCount / flags.length * 100) + '%' }} /></div>}
+    <div className="adm-coach-layout"><section className="card adm-coach-setup">
+    <div className="adm-coach-progress"><span>{t('{0} of {1} steps done. Finish the open step and the next one unfolds.', number(doneCount), number(flags.length))}</span>{!live && <div className="adm-progress" aria-hidden="true"><i style={{ width: Math.round(doneCount / flags.length * 100) + '%' }} /></div>}</div>
     <div className="adm-lead">
       {live ? t("Users find the Coach under Plan → Coach. This switch is the only place it can be turned off for everyone.")
         : t('{0} of {1} steps done. Finish the open step and the next one unfolds.', number(doneCount), number(flags.length))}
@@ -348,6 +342,16 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
         </div>
       </Step>
 
+    </>}
+    </section>
+    <aside className="adm-coach-side"><section className="card">
+      <h2>{t('Status')}</h2><div className="adm-status"><span role="status" aria-label={t('Status')} className={'adm-pill ' + (live ? 'ok' : 'warn')}>{t(live ? 'ready' : 'not ready')}</span></div>
+      <p className="adm-lead">{status}</p>
+      <div className="adm-kv"><span className="k">{t('Provider')}</span><span className="v">{meta.label}</span></div>
+      <div className="adm-kv"><span className="k">{t('Model')}</span><span className="v adm-mono">{d.model || '–'}</span></div>
+      <div className="adm-kv"><span className="k">{t('Credential')}</span><span className="v"><CredentialPill auth={d.auth} /></span></div>
+    </section><section className="card">
+    {d.enabled && <>
       {/* ---------- advanced ---------- */}
       <details className="adm-fold">
         <summary>{t("Advanced")} <Icon name="chevronRight" className="chev" /></summary>
@@ -423,6 +427,13 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
         </div>
       </details>
     </>}
+    </section></aside></div>
+    <div className="adm-actions">
+      <span className="adm-save-note">{t(Object.keys(draft).length || capsDraft || headersDraft !== null ? 'Unsaved changes' : 'No unsaved changes')}</span>
+      <Button variant="tinted" disabled={busy || (!Object.keys(draft).length && !capsDraft && headersDraft === null)} onClick={() => { setDraft({}); setCapsDraft(null); setHeadersDraft(null) }}>{t('Discard changes')}</Button>
+      <Button variant="primary" disabled={busy || (!Object.keys(draft).length && headersDraft === null)} onClick={() => save(draft)}>{t("Save changes")}</Button>
+      {capsDraft && <Button variant="tinted" disabled={busy} onClick={() => save({ caps: capsDraft })}>{t("Save usage limits")}</Button>}
+    </div>
   </div>
 }
 

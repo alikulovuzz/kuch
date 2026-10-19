@@ -3,6 +3,7 @@ import { messages } from './messages.js'
 import { coachMessages } from './coach-messages.js'
 import { auditMessages } from './audit-messages.js'
 import { workflowMessages } from './workflow-messages.js'
+import { redesignMessages } from './redesign-messages.js'
 export const languages = { en: 'English', 'uz-Latn': 'O‘zbekcha', 'uz-Cyrl': 'Ўзбекча', ru: 'Русский' }
 export const dictionaries = {
   en: {},
@@ -11,7 +12,7 @@ export const dictionaries = {
   'uz-Cyrl': { Overview: 'Умумий кўриниш', Users: 'Фойдаланувчилар', Invites: 'Таклифлар', 'AI Coach': 'AI мураббий', Activity: 'Фаоллик', 'Back to workouts': 'Машқларга қайтиш', 'Admin workspace': 'Администратор панели', 'Admin language': 'Панель тили', 'Search users': 'Фойдаланувчиларни қидириш', 'Account status': 'Ҳисоб ҳолати', 'All accounts': 'Барча ҳисоблар', Enabled: 'Фаол', Disabled: 'Ўчирилган', 'No matching users': 'Мос фойдаланувчилар йўқ', 'Copy admin link': 'Панель ҳаволасини нусхалаш', Copied: 'Нусхаланди', 'Copy failed. Select and copy the text.': 'Нусхаланмади. Матнни танлаб нусхаланг.', 'Administrator access required': 'Администратор рухсати керак', Home: 'Бош саҳифа', 'Switch account': 'Ҳисобни алмаштириш', 'Sign in': 'Кириш' },
 }
 for (const key of Object.keys(dictionaries.ru)) dictionaries.en[key] = key
-for (const [key, ru, latin, cyrillic] of [...messages, ...coachMessages, ...auditMessages, ...workflowMessages]) {
+for (const [key, ru, latin, cyrillic] of [...messages, ...coachMessages, ...auditMessages, ...workflowMessages, ...redesignMessages]) {
   dictionaries.en[key] = key
   dictionaries.ru[key] = ru
   dictionaries['uz-Latn'][key] = latin

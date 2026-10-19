@@ -779,7 +779,7 @@ describe('AdminCoach — what the card refuses to show', () => {
 describe('AdminCoach — readiness and the step count', () => {
   it('a reachable, credentialed, enabled provider reads ready', async () => {
     await mount()
-    expect(host.querySelector('.adm-pill').textContent).toBe('ready')
+    expect(host.querySelector('[role="status"][aria-label="Status"]').textContent).toBe('ready')
     expect(host.textContent).toContain('On · Claude · claude-sonnet-4')
     expect(host.querySelector('.adm-progress')).toBeFalsy()
   })
@@ -787,7 +787,7 @@ describe('AdminCoach — readiness and the step count', () => {
   it('an unreachable runtime reads not ready and points at the Test step', async () => {
     mocks.routes['/api/admin/coach'] = status({ runtime: { ok: false, version: null, error: 'connect ECONNREFUSED', needsKey: false } })
     await mount()
-    expect(host.querySelector('.adm-pill').textContent).toBe('not ready')
+    expect(host.querySelector('[role="status"][aria-label="Status"]').textContent).toBe('not ready')
     expect(host.textContent).toContain('the provider can’t be reached')
     expect(host.textContent).toContain('connect ECONNREFUSED')
   })

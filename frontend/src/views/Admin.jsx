@@ -12,6 +12,8 @@ import AdminCoach from './AdminCoach.jsx'
 import AdminSecurity from './AdminSecurity.jsx'
 import AdminAccess from './AdminAccess.jsx'
 import '../admin.css'
+import '../admin-design.css'
+import { AdminMark, AdminAvatar, AdminSectionIcon } from '../components/AdminChrome.jsx'
 import { useAdminLanguage, languages } from '../lib/admin-language.js'
 import { appBase } from '../lib/app-base.js'
 import { MOBILE } from '../lib/mobile.js'
@@ -101,8 +103,8 @@ function UserDetail({ id, onChanged, close }) {
       .then(r => { onChanged(); close(); openSheet(done => <ResetCodeSheet name={r.name} email={u.email} code={r.code} expires={r.expires} close={done} />, { locked: true }) })
       .catch(() => { setError('The reset result is unknown. Check the account before deliberately issuing another code; a new code replaces the previous one.'); onChanged() }).finally(() => setBusy(false)) },
   })
-  return <>
-    <h3 className="capitalize">{u.name}</h3>
+  return <section className="adm-user-detail">
+    <div className="adm-user-detail-head"><AdminAvatar name={u.name} /><div><h3>{u.name}</h3><span className="adm-hint">{t('joined')} {date(u.created)}</span></div><button className="iconbtn" aria-label={t('Close details')} onClick={close}><Icon name="xmark" /></button></div>
     {error && <p role="alert">{t(error)}</p>}
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '8px 0 12px' }}>
       {u.admin && <span className="adm-pill acc">{t("admin")}</span>}
@@ -163,7 +165,7 @@ function UserDetail({ id, onChanged, close }) {
         <span className="small muted">{number(w.vol ?? workoutVolume(w))} {d.unit}</span>
       </div>)}
     </div> : <div className="adm-empty">{t("No workouts logged.")}</div>}
-  </>
+  </section>
 }
 
 function InvitesCard({ invites, reload, inviteOnly, error }) {
@@ -198,10 +200,10 @@ function InvitesCard({ invites, reload, inviteOnly, error }) {
   }
   const open = (invites || []).filter(i => !i.usedBy && filter !== 'used')
   const used = (invites || []).filter(i => i.usedBy && filter !== 'unused')
-  return <div className="card">
+  return <div className="card adm-invites-card">
     <div className="row between"><h2 style={{ margin: 0 }}>{t("Invite codes")}</h2>
       <Button variant="primary" size="sm" disabled={busy} onClick={gen} icon="plus">{t("New code")}</Button></div>
-    <select className="adm-select" aria-label={t("Invite status")} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{t("All")}</option><option value="unused">{t("Unused")}</option><option value="used">{t("Already used")}</option></select>
+    <div className="adm-filter-tabs" role="group" aria-label={t('Invite status')}>{[['unused', 'Unused'], ['used', 'Already used'], ['all', 'All']].map(([value, label]) => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{t(label)}</button>)}</div>
     {error && <p role="alert">{t(error)} <button className="btn" onClick={reload}>{t("Try again")}</button></p>}
     {!invites && !error && <p role="status">{t("Loading…")}</p>}
     {message && <p role="status">{t(message)}</p>}
@@ -213,7 +215,7 @@ function InvitesCard({ invites, reload, inviteOnly, error }) {
     </div>
     {open.length ? <>
       <div className="adm-group-t">{t("Unused · tap to copy")}</div>
-      {open.map(i => <div key={i.code} className="row between" style={{ padding: '6px 0', borderBottom: 'var(--hair) solid var(--sep)' }}>
+      {open.map(i => <div key={i.code} className="row between adm-invite-row" style={{ padding: '6px 0', borderBottom: 'var(--hair) solid var(--sep)' }}>
         <button className="adm-code" onClick={() => copy(i.code)} aria-label={'copy ' + i.code}>{i.code}</button>
         <div className="row" style={{ gap: 4 }}>
           <button className="iconbtn adm-iconbtn" onClick={() => copy(i.code)} aria-label={t("copy")}><Icon name="copy" /></button>
@@ -282,7 +284,8 @@ function AuditCard({ tick }) {
     </div>
     {rows.map(e => {
       const line = auditLine(e, t)
-      return <div key={e.id} className="row between" style={{ padding: '8px 2px', borderBottom: 'var(--hair) solid var(--sep)' }}>
+      return <div key={e.id} className="row between adm-audit-event" style={{ borderBottom: 'var(--hair) solid var(--sep)' }}>
+        <Icon name={e.ok ? 'check' : 'xmark'} />
         <div className="grow">
           <div className="small" style={{ fontWeight: 600 }}>{line.title}
             {/* a red pill, not a red row: twenty fumbled Face IDs in a row shouldn't read as an incident */}
@@ -290,7 +293,7 @@ function AuditCard({ tick }) {
             {auditCat(e.ev) === 'admin' && <span className="adm-pill acc" style={{ marginInlineStart: 6 }}>{t("admin")}</span>}</div>
           {line.sub && <div className="dim" style={{ fontSize: '.72rem' }}>{line.sub}</div>}
         </div>
-        <span className="small muted" style={{ flex: 'none', marginInlineStart: 8 }}>{date(e.ts)}</span>
+        <time dateTime={new Date(e.ts).toISOString()}>{date(e.ts)}</time>
       </div>
     })}
     {meta && !rows.length && <div className="adm-empty">{t("Nothing logged yet.")}</div>}
@@ -315,11 +318,22 @@ export default function Admin() {
   const [section, setSection] = useState(new URLSearchParams(location.hash.split('?')[1] || '').get('section') === 'security' ? 'Security' : 'Overview')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
+  const [userPage, setUserPage] = useState(0)
+  const [coachStatus, setCoachStatus] = useState(null)
+  const [accountStatus, setAccountStatus] = useState(null)
+  const [recentEvents, setRecentEvents] = useState(null)
+  const [recentError, setRecentError] = useState('')
   const [copyStatus, setCopyStatus] = useState('')
   const [dirtyCoach, setDirtyCoach] = useState(false)
   const [dirtySecurity, setDirtySecurity] = useState(false)
   const [pendingLeave, setPendingLeave] = useState(null)
   const [formVersion, setFormVersion] = useState(0)
+  useEffect(() => { setUserPage(0) }, [search, status])
+  const loadRecent = () => api('/api/admin/audit?limit=4').then(result => { setRecentEvents(result.events || []); setRecentError('') }).catch(error => setRecentError(adminError(error)))
+  useEffect(() => {
+    api('/api/account/security').then(setAccountStatus).catch(() => {})
+    loadRecent()
+  }, [tick])
   const dirty = dirtyCoach || dirtySecurity
   const blocker = useBlocker(dirty)
   const leaveDialog = useRef(null)
@@ -376,7 +390,7 @@ export default function Admin() {
   if (!user?.admin) return null
   if (accessDenied) return <AdminAccess />
 
-  const openUser = id => openSheet(close => <UserDetail id={id} onChanged={loadUsers} close={close} />)
+  const openUser = id => openSheet(close => <UserDetail id={id} onChanged={loadUsers} close={close} />, { kind: 'admin-detail' })
   const liveUsers = (users || []).filter(u => u.live)
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const disabledCount = (users || []).filter(u => u.disabled).length
@@ -384,22 +398,47 @@ export default function Admin() {
   const filteredUsers = (users || []).filter(u =>
     (u.name + ' ' + u.id).toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()) &&
     (status === 'all' || (status === 'disabled' ? u.disabled : !u.disabled)))
+  const page = Math.min(userPage, Math.max(0, Math.ceil(filteredUsers.length / 25) - 1))
+  const visibleUsers = section === 'Overview' ? filteredUsers.slice(0, 5) : filteredUsers.slice(page * 25, (page + 1) * 25)
+  const coachProvider = coachStatus?.providers?.find(provider => provider.id === coachStatus.provider)
+  const coachNeedsAttention = coachStatus?.enabled && !coachStatus.disabledByEnv && (!coachStatus.runtime?.ok || !['connected', 'not-required', 'optional'].includes(coachStatus.auth?.state) || (coachProvider?.baseUrl && !coachStatus.baseUrl))
+  const methodCount = accountStatus?.password && accountStatus?.google && typeof accountStatus.passkeys === 'number'
+    ? Number(accountStatus.password.available && accountStatus.password.set) + accountStatus.passkeys + Number(accountStatus.google.available && accountStatus.google.linked) : null
+  const accountNeedsAttention = methodCount !== null && methodCount < 2
+  const attentionCount = Number(!!coachNeedsAttention) + Number(accountNeedsAttention)
+  const sections = ['Overview', 'Users', 'Invites', 'AI Coach', 'Activity']
   return <div className="adm-workspace" lang={locale} dir="ltr">
+    <aside className="adm-sidebar">
+    <div className="adm-brand"><AdminMark /><div className="adm-brand-copy">Kuch<small>{t('Admin console')}</small></div></div>
     <nav className="adm-nav" aria-label={t("Admin sections")}>
-      {['Overview', 'Users', 'Invites', 'AI Coach', 'Activity'].map(name => <button key={name} aria-current={section === name ? 'page' : undefined} onClick={() => leave(() => setSection(name))}>{t(name)}</button>)}
-      <button onClick={() => nav('/home')}>{t('Back to workouts')}</button>
+      <span className="adm-nav-label">{t('Workspace')}</span>
+      {sections.map(name => <button key={name} aria-current={section === name ? 'page' : undefined} onClick={() => leave(() => setSection(name))}><AdminSectionIcon section={name} /><span>{t(name)}</span>{name === 'Users' && users && <small>{number(users.length)}</small>}{name === 'Invites' && invites && <small>{number(invites.filter(invite => !invite.usedBy).length)}</small>}</button>)}
     </nav>
+    <nav className="adm-nav" aria-label={t('Account')}>
+      <span className="adm-nav-label">{t('Account')}</span>
+      <button aria-current={section === 'Security' ? 'page' : undefined} onClick={() => leave(() => setSection('Security'))}><Icon name="shield" /><span>{t('Security')}</span></button>
+      <button onClick={() => leave(() => nav('/home'))}><Icon name="chevronLeft" /><span>{t('Back to workouts')}</span></button>
+    </nav>
+    <div className="adm-sidebar-bottom">
+      <label className="adm-language"><Icon name="globe" /><select className="adm-select" aria-label={t('Admin language')} value={locale} onChange={event => setLocale(event.target.value)}>{Object.entries(languages).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+      <button className="adm-account" onClick={() => leave(() => setSection('Security'))}><AdminAvatar name={user.name} className="account" /><span><strong>{user.name}</strong><small>{t('Administrator')}</small></span></button>
+    </div>
+    </aside>
     <main className="adm-main">
     {new URLSearchParams(location.hash.split('?')[1] || '').get('authError') && <p role="alert">{t(adminError(new URLSearchParams(location.hash.split('?')[1] || '').get('authError')))}</p>}
     <div className="hdr">
+      <AdminMark className="adm-mobile-mark" />
       <div className="adm-title"><h1 style={{ margin: 0 }}>{t(section)}</h1>
         {['Overview', 'Users'].includes(section) && <div className="sub">{users ? t('{0} users · {1} active this week', number(users.length), number(activeCount)) : t(usersErr ? 'Could not load' : 'Loading…')}</div>}</div>
-      <button className="btn adm-security-link" onClick={() => leave(() => setSection(section === 'Security' ? 'Overview' : 'Security'))}>{t(section === 'Security' ? 'Back to admin' : 'My account → Security')}</button>
-      <button className="btn adm-copy-link" onClick={copyLink}>{t('Copy admin link')}</button>
-      <select className="adm-select" aria-label={t("Admin language")} value={locale} onChange={e => setLocale(e.target.value)}>
-        {Object.entries(languages).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select>
-      <button className="iconbtn adm-refresh" onClick={() => { loadUsers(); loadInvites(); setTick(n => n + 1) }} aria-label={t("refresh")}>↻</button>
+      <div className="adm-toolbar">
+        {lastUpdated && <time dateTime={new Date(lastUpdated).toISOString()}>{t('Last updated')} {new Date(lastUpdated).toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })}</time>}
+        <button className="iconbtn adm-refresh" onClick={() => { loadUsers(); loadInvites(); setTick(n => n + 1) }} aria-label={t("refresh")}><Icon name="reset" /></button>
+        <button className="btn adm-copy-link" onClick={copyLink}><Icon name="link" />{t('Copy admin link')}</button>
+        <button className="adm-mobile-account" aria-label={t('My account → Security')} onClick={() => leave(() => setSection(section === 'Security' ? 'Overview' : 'Security'))}><AdminAvatar name={user.name} className="account" /></button>
+      </div>
+    </div>
+    <div className="adm-mobile-settings">
+      {section === 'Security' && <><button className="adm-text-action" onClick={() => leave(() => nav('/home'))}><Icon name="chevronLeft" />{t('Back to workouts')}</button><label className="adm-mobile-language"><select className="adm-select" aria-label={t('Admin language')} value={locale} onChange={event => setLocale(event.target.value)}>{Object.entries(languages).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label><button className="btn adm-mobile-copy" onClick={copyLink}><Icon name="link" />{t('Copy admin link')}</button></>}
     </div>
     {showLeave && <dialog ref={leaveDialog} className="card adm-leave" role="alertdialog" aria-label={t('Unsaved changes')} onCancel={e => { e.preventDefault(); stay() }}>
       <p>{t('Discard unsaved changes?')}</p>
@@ -407,8 +446,7 @@ export default function Admin() {
       <button className="btn danger" onClick={discard}>{t('Discard changes')}</button>
     </dialog>}
     {copyStatus && <div role="status"><p>{t(copyStatus)}</p><input className="field" aria-label={t("Admin link")} readOnly value={adminLink} onFocus={e => e.target.select()} /></div>}
-    {lastUpdated && ['Overview', 'Users'].includes(section) && <p className="adm-hint">{t('Last updated')}: {new Date(lastUpdated).toLocaleString(locale)}</p>}
-    {section === 'Overview' && <div className="adm-intro">{t("Manage accounts, invitations, Coach and activity. Account details include available workout history and summaries; downloads are not complete backups.")}</div>}
+    {['Overview', 'Users'].includes(section) && <p className="adm-mobile-meta">{users ? t('{0} users · {1} active this week', number(users.length), number(activeCount)) : t(usersErr ? 'Could not load' : 'Loading…')}</p>}
 
     {usersErr && <div className="card" role="alert" style={{ borderColor: 'var(--red)' }}>
       <div className="row between"><h2 style={{ margin: 0 }}>{t(users ? 'The last update failed' : 'Could not load the users')}</h2>
@@ -419,14 +457,20 @@ export default function Admin() {
     </div>}
 
     {section === 'Overview' && <div className="tiles" style={{ marginBottom: 12 }}>
-      <button className="tile" onClick={() => setSection('Users')}><div className="l">{t("Users")}</div><div className="v">{users ? number(users.length) : '–'}</div></button>
-      <button className="tile" onClick={() => setSection('Activity')}><div className="l">{t("Training now")}</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? number(liveUsers.length) : '–'}</div></button>
+      <button className="tile" onClick={() => setSection('Users')}><div className="l">{t("Users")}</div><div className="v">{users ? number(users.length) : '–'}</div><span className="adm-tile-note">{t('All profiles on this instance')}</span></button>
+      <button className="tile" onClick={() => setSection('Activity')}><div className="l">{t("Training now")}</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? number(liveUsers.length) : '–'}</div><span className="adm-tile-note">{t(liveUsers.length ? 'Live sessions' : 'No sessions running now.')}</span></button>
       <button className="tile" onClick={() => setSection('Users')}><div className="l">{t("Active 7 days")}</div><div className="v">{users ? number(activeCount) : '–'}</div></button>
-      <button className="tile" onClick={() => { setStatus('disabled'); setSection('Users') }}><div className="l">{t("Disabled")}</div><div className="v">{users ? number(disabledCount) : '–'}</div></button>
+      <button className="tile" onClick={() => { setStatus('disabled'); setSection('Users') }}><div className="l">{t("Disabled")}</div><div className="v">{users ? number(disabledCount) : '–'}</div><span className="adm-tile-note">{t('Signed out, nothing deleted')}</span></button>
     </div>}
 
+    {section === 'Overview' && attentionCount > 0 && <section className="card adm-attention">
+      <h2>{t('Needs attention')}<span className="adm-attention-count">{number(attentionCount)}</span></h2>
+      {coachNeedsAttention && <div className="adm-attention-item"><Icon name="sparkles" /><div><strong>{t('AI Coach is on but not ready')}</strong><p>{t('Finish the setup and test the saved connection.')}</p></div><button className="btn primary" onClick={() => setSection('AI Coach')}>{t('Configure Coach')}</button></div>}
+      {accountNeedsAttention && <div className="adm-attention-item"><Icon name="shield" /><div><strong>{t('Keep a backup sign-in method.')}</strong><p>{t('Review the sign-in methods for your account.')}</p></div><button className="btn" onClick={() => setSection('Security')}>{t('Review security')}</button></div>}
+    </section>}
+
     <div className={section === 'Overview' ? 'adm-overview' : undefined}>
-    {['Overview', 'Activity'].includes(section) && <div className="card adm-live" style={{ borderColor: 'var(--acc)' }}>
+    {['Overview', 'Activity'].includes(section) && <div className="card adm-live">
       <h2 className="row" style={{ margin: '0 0 2px', gap: 6 }}><Icon name="dot" style={{ fontSize: 10, color: 'var(--green)' }} />{t("Training now")}</h2>
       <div className="adm-lead">{t("Sessions running at this moment. Tap a name for details.")}</div>
       {!liveUsers.length && <p>{t(users ? 'No sessions running now.' : usersErr ? 'Could not load the users' : 'Loading…')}</p>}
@@ -439,45 +483,51 @@ export default function Admin() {
 
     {/* The Coach setup. Renders nothing at all unless the instance offers the Coach, so an admin
         page on a box that never enabled it is byte-for-byte the page it was before. */}
-    <div hidden={section !== 'AI Coach'}><AdminCoach key={formVersion} tick={tick} onDirty={setDirtyCoach} /></div>
-    {section === 'Security' && <AdminSecurity key={formVersion} tick={tick} onDirty={setDirtySecurity} />}
+    <div hidden={section !== 'AI Coach'}><AdminCoach key={formVersion} tick={tick} onDirty={setDirtyCoach} onStatus={setCoachStatus} /></div>
+    {section === 'Security' && <AdminSecurity key={formVersion} tick={tick} onDirty={setDirtySecurity} onStatus={setAccountStatus} />}
 
     {section === 'Invites' && <InvitesCard invites={invites} error={invitesErr} reload={loadInvites} inviteOnly={inviteOnly} />}
 
-    {['Overview', 'Users'].includes(section) && <div className="card">
-      <h2 style={{ margin: 0 }}>{t("Users")}</h2>
-      <div className="adm-actions">
+    {['Overview', 'Users'].includes(section) && <div className="card adm-users-card">
+      <div className="adm-panel-head"><h2>{t(section === 'Overview' ? 'Recent users' : 'Users')}</h2>{section === 'Overview' && <button className="adm-text-action" onClick={() => setSection('Users')}>{t('View all users')}<Icon name="chevronRight" /></button>}</div>
+      {section === 'Users' && <><div className="adm-actions">
         <input className="field" aria-label={t("Search users")} placeholder={t("Search users")} value={search} onChange={e => setSearch(e.target.value)} />
         <select aria-label={t("Account status")} className="adm-select" value={status} onChange={e => setStatus(e.target.value)}>
           <option value="all">{t("All accounts")}</option><option value="active">{t("Enabled")}</option><option value="disabled">{t("Disabled")}</option>
         </select>
       </div>
-      <div className="adm-lead">{t("Everyone with a profile on this instance. Tap one to see their activity, to disable the account (nothing is deleted) or to delete it with all their data for good.")}</div>
+      <div className="adm-lead">{t("Everyone with a profile on this instance. Tap one to see their activity, to disable the account (nothing is deleted) or to delete it with all their data for good.")}</div></>}
+      <div className="adm-user-table">
+      <div className="adm-user-columns" aria-hidden="true"><span>{t('Name')}</span><span>{t('Account status')}</span><span>{t('Workouts')}</span><span>{t('Last sync')}</span><span /></div>
       <div className="list">
-        {(section === 'Overview' ? filteredUsers.slice(0, 5) : filteredUsers).map(u => <button key={u.id} className="item" onClick={() => openUser(u.id)}>
-          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginInlineEnd: 5 }} />}{u.name} {u.admin && <span className="adm-pill acc" style={{ marginInlineStart: 4 }}>{t("admin")}</span>}{u.disabled && <span className="adm-pill bad" style={{ marginInlineStart: 4 }}>{t("disabled")}</span>}</div>
-            <div className="ss">{u.live ? t('Training now') + ' · ' + u.live.name : t('{0} workouts · last sync {1}', number(u.workouts), rel(u.lastSync))}{u.lastWorkout && ' · ' + t('Last workout') + ' ' + date(u.lastWorkout)}</div>
-            {u.email && <div className="ss" title={t("sign-in e-mail")}>{u.email}</div>}</div>
-          {u.hasPush && <Icon name="bell" title={t("push notifications on")} style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
+        {visibleUsers.map(u => <button key={u.id} className="item adm-user-row" onClick={() => openUser(u.id)}>
+          <div className="adm-user-identity"><AdminAvatar name={u.name} /><div className="grow"><div className="tt">{u.name}</div>
+            <div className="adm-user-mobile-meta">{u.live ? t('Training now') + ' · ' + u.live.name : t('{0} workouts · last sync {1}', number(u.workouts), rel(u.lastSync))}</div>
+            {u.email && <div className="ss" title={t("sign-in e-mail")}>{u.email}</div>}</div></div>
+          <span className={'adm-pill adm-user-state ' + (u.disabled ? 'bad' : u.admin ? 'acc' : 'ok')}>{t(u.disabled ? 'disabled' : u.admin ? 'admin' : 'Active')}</span>
+          <span className="adm-user-workouts">{number(u.workouts)}</span><span className="adm-user-sync">{rel(u.lastSync)}</span><Icon name="chevronRight" className="chev" />
         </button>)}
         {users && !users.length && <div className="adm-empty">{t("No users yet.")}</div>}
         {!!users?.length && !filteredUsers.length && <div className="adm-empty">{t("No matching users")}</div>}
       </div>
-      {section === 'Overview' && <button className="btn" onClick={() => setSection('Users')}>{t('View all users')}</button>}
+      </div>
+      {section === 'Users' && filteredUsers.length > 25 && <div className="adm-pagination"><span>{t('Showing {0}–{1} of {2}', number(page * 25 + 1), number(Math.min((page + 1) * 25, filteredUsers.length)), number(filteredUsers.length))}</span><div><button className="btn" disabled={!page} onClick={() => setUserPage(page - 1)}>{t('Previous')}</button><button className="btn" disabled={(page + 1) * 25 >= filteredUsers.length} onClick={() => setUserPage(page + 1)}>{t('Next')}</button></div></div>}
     </div>}
 
-    {section === 'Overview' && <section className="card">
-      <h2>{t('Invites')}</h2>
-      <p>{t('Unused')}: {invites ? number(invites.filter(i => !i.usedBy).length) : '–'}</p>
-      <button className="btn" onClick={() => setSection('Invites')}>{t('Manage invites')}</button>
-      <h2>{t('AI Coach')}</h2>
-      <button className="btn" onClick={() => setSection('AI Coach')}>{t('Configure Coach')}</button>
-      <h2>{t('Activity')}</h2>
-      <button className="btn" onClick={() => setSection('Activity')}>{t('View activity')}</button>
+    {section === 'Overview' && <section className="card adm-quick-links">
+      <button onClick={() => setSection('Invites')}><AdminSectionIcon section="Invites" /><span>{t('Manage invites')}<small>{t('Unused')}: {invites ? number(invites.filter(invite => !invite.usedBy).length) : '–'}</small></span><Icon name="chevronRight" /></button>
+      <button onClick={() => setSection('AI Coach')}><Icon name="sparkles" /><span>{t('Configure Coach')}<small>{t(coachNeedsAttention ? 'not ready' : 'AI Coach')}</small></span><Icon name="chevronRight" /></button>
+      <button onClick={() => setSection('Activity')}><Icon name="pulse" /><span>{t('View activity')}</span><Icon name="chevronRight" /></button>
+    </section>}
+    {section === 'Overview' && <section className="card adm-recent-activity"><div className="adm-panel-head"><h2>{t('Recent activity')}</h2><button className="adm-text-action" onClick={() => setSection('Activity')}>{t('View activity')}<Icon name="chevronRight" /></button></div>
+      {recentError ? <p role="alert">{t(recentError)} <button className="adm-text-action" onClick={loadRecent}>{t('Try again')}</button></p> : recentEvents === null ? <p role="status">{t('Loading…')}</p> : !recentEvents.length ? <p className="adm-empty">{t('Nothing logged yet.')}</p> : recentEvents.slice(0, 4).map(event => { const line = auditLine(event, t); return <div className="adm-recent-event" key={event.id}><Icon name={event.ok ? 'check' : 'xmark'} /><div><strong>{line.title}</strong><small>{line.sub}</small></div><time dateTime={new Date(event.ts).toISOString()} title={date(event.ts)}>{rel(event.ts)}</time></div> })}
     </section>}
 
     {section === 'Activity' && <div style={{ marginTop: 14 }}><AuditCard tick={tick} /></div>}
     </div>
     </main>
+    <nav className="adm-bottom-nav" aria-label={t('Admin sections')}>
+      {sections.map(name => <button key={name} aria-current={section === name ? 'page' : undefined} onClick={() => leave(() => setSection(name))}><span><AdminSectionIcon section={name} /></span>{t(name)}</button>)}
+    </nav>
   </div>
 }

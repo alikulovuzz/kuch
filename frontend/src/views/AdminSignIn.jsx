@@ -8,6 +8,8 @@ import { adminError } from '../lib/admin-errors.js'
 import { MOBILE } from '../lib/mobile.js'
 import { normalizeServerUrl } from '../lib/remote.js'
 import { ConnectSheet } from './MobileOnboarding.jsx'
+import Icon from '../components/Icon.jsx'
+import { AuthFrame } from '../components/AdminChrome.jsx'
 
 function AdminAdoptPrompt({ extras, finish }) {
   const { t } = useAdminLanguage()
@@ -69,52 +71,41 @@ export default function AdminSignIn() {
   const heading = mode === 'login' ? 'Sign in' : mode === 'verify' ? 'Verify email' : mode === 'reset' ? 'Reset password' : 'Forgot password?'
   const server = normalizeServerUrl(serverInput)
   const nativeDestination = '/#/admin' + (query.get('section') === 'security' ? '?section=security' : '')
-  if (MOBILE) return <main className="narrow adm-auth" lang={locale}>
-    <div className="adm-auth-top">
-      <span>{t('Admin workspace')}</span>
-      <select aria-label={t('Admin language')} className="adm-select" value={locale} onChange={e => setLocale(e.target.value)}>
-        {Object.entries(languages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select>
-    </div>
-    <section className="adm-auth-card">
-      <h1>{t('Connect your admin account')}</h1>
+  const languageControl = <select aria-label={t('Admin language')} className="adm-select" value={locale} onChange={e => setLocale(e.target.value)}>
+    {Object.entries(languages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+  </select>
+  return <AuthFrame title={t(MOBILE ? 'Connect your admin account' : heading)} label={t('Admin workspace')}
+    intro={t('Accounts, invites, Coach and activity for this server.')} locale={locale} languageControl={languageControl}
+    homeLabel={t('Home')} onHome={() => nav('/home')}
+    footer={!MOBILE && mode === 'login' && !config?.google_login ? t('Google sign-in is unavailable on this server.') : null}>
+    {MOBILE ? <>
       <p className="adm-auth-note adm-auth-intro">{t('Sign in to your Kuch server in a browser. Then open Settings → Account → Pair the mobile app and enter the code here.')}</p>
       <div className="adm-auth-form">
         <div className="adm-auth-field"><label htmlFor="adm-auth-server">{t('Server address')}</label><input id="adm-auth-server" className="input" inputMode="url" autoCapitalize="none" autoCorrect="off" value={serverInput} onChange={e => setServerInput(e.target.value)} placeholder="https://example.com" /></div>
         {server ? <a className="btn primary adm-auth-submit" href={server.replace(/\/+$/, '') + nativeDestination} target="_blank" rel="noopener noreferrer">{t('Open server sign-in in browser')}</a> : <p className="adm-auth-note">{t('Enter your server address to open sign-in.')}</p>}
         <button className="btn adm-auth-submit" onClick={() => openSheet(close => <AdminConnectSheet close={close} initialUrl={server || serverInput} />)}>{t('Pair this app with a code')}</button>
       </div>
-    </section>
-    <button className="adm-auth-text-button adm-auth-home" onClick={() => nav('/home')}>{t('Home')}</button>
-  </main>
-  return <main className="narrow adm-auth" lang={locale}>
-    <div className="adm-auth-top">
-      <span>{t('Admin workspace')}</span>
-      <select aria-label={t('Admin language')} className="adm-select" value={locale} onChange={e => setLocale(e.target.value)}>
-        {Object.entries(languages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select>
-    </div>
-    <section className="adm-auth-card">
-      <h1>{t(heading)}</h1>
+    </> : <>
       <form onSubmit={submit} className="adm-auth-form">
         {['login', 'recover'].includes(mode) && <div className="adm-auth-field"><label htmlFor="adm-auth-email">{t(mode === 'login' ? 'Name or login email' : 'Login email')}</label><input id="adm-auth-email" className="input" name="email" type={mode === 'recover' ? 'email' : 'text'} inputMode={mode === 'recover' ? 'email' : 'text'} autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required /></div>}
         {['login', 'reset'].includes(mode) && <div className="adm-auth-field">
-          <div className="adm-auth-field-head"><label htmlFor="adm-auth-password">{t(mode === 'reset' ? 'New password' : 'Password')}</label><button type="button" className="adm-auth-visibility" onClick={() => setShow(!show)}>{t(show ? 'Hide password' : 'Show password')}</button></div>
-          <input id="adm-auth-password" className="input" name="password" type={show ? 'text' : 'password'} autoComplete={mode === 'reset' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required />
+          <label htmlFor="adm-auth-password">{t(mode === 'reset' ? 'New password' : 'Password')}</label>
+          <div className="adm-auth-password"><input id="adm-auth-password" className="input" name="password" type={show ? 'text' : 'password'} autoComplete={mode === 'reset' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} required />
+            <button type="button" className="adm-auth-visibility" aria-label={t(show ? 'Hide password' : 'Show password')} aria-pressed={show} onClick={() => setShow(!show)}><Icon name="eye" /></button></div>
         </div>}
         <button type="submit" className="btn primary adm-auth-submit" disabled={busy || (mode === 'login' && !config?.password_login)}>{t(mode === 'login' ? 'Sign in' : mode === 'verify' ? 'Verify email' : mode === 'reset' ? 'Reset password' : 'Send recovery link')}</button>
       </form>
       {mode === 'login' && <>
         {!config?.password_login && <p className="adm-auth-note">{t('Password sign-in is unavailable on this server.')}</p>}
+        <div className="adm-auth-divider">{t('or')}</div>
         <div className="adm-auth-options">
-          {config?.google_login && !MOBILE ? <button className="btn" disabled={busy} onClick={() => run(async () => { const r = await api('/api/auth/google/start', { method: 'POST', body: JSON.stringify({ returnTo: location.hash.slice(1) || '/admin' }) }); location.assign(r.url) })}>{t('Sign in with Google')}</button> : <p className="adm-auth-note">{t('Google sign-in is unavailable on this server.')}</p>}
-          <button className="btn" disabled={busy} onClick={() => run(async () => signedIn(await passkeyLogin()))}>{t('Sign in with a passkey')}</button>
+          <button className="btn adm-auth-submit" disabled={busy} onClick={() => run(async () => signedIn(await passkeyLogin()))}><Icon name="key" />{t('Sign in with a passkey')}</button>
+          {config?.google_login && <button className="btn adm-auth-submit" disabled={busy} onClick={() => run(async () => { const r = await api('/api/auth/google/start', { method: 'POST', body: JSON.stringify({ returnTo: location.hash.slice(1) || '/admin' }) }); location.assign(r.url) })}>{t('Sign in with Google')}</button>}
         </div>
         <button className="adm-auth-text-button" onClick={() => setMode('recover')}>{t('Forgot password?')}</button>
       </>}
       {mode !== 'login' && <button className="adm-auth-text-button" onClick={() => setMode('login')}>{t('Sign in')}</button>}
       {message && <p role="status" className="adm-auth-message">{t(message)}</p>}
-    </section>
-    <button className="adm-auth-text-button adm-auth-home" onClick={() => nav('/home')}>{t('Home')}</button>
-  </main>
+    </>}
+  </AuthFrame>
 }
