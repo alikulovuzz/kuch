@@ -16,6 +16,20 @@ body.admin-design{background:#0b0d0f}
 .admin-design :is(.input,.field,.adm-select){border:1px solid #2a3137;border-radius:10px;background:#14181b;color:var(--label);font-size:14px;min-height:46px;padding:11px 14px}
 .admin-design :is(.input,.field)::placeholder{color:#74818c}
 .admin-design .adm-select{padding-right:34px}
+.admin-design .adm-select,.admin-design .adm-select option{color-scheme:dark}
+.admin-design .adm-select option{background:#14181b;color:#eceff1}
+/* Keep native select semantics and keyboard handling while styling its popup. */
+@supports(appearance:base-select){
+  .admin-design .adm-select,.admin-design .adm-select::picker(select){appearance:base-select}
+  .admin-design .adm-select{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-right:14px;cursor:pointer;background-image:none}
+  .admin-design .adm-select::picker-icon{color:#8c969e;transition:rotate .15s ease}
+  .admin-design .adm-select:open::picker-icon{rotate:180deg;color:#86efac}
+  .admin-design .adm-select::picker(select){background:#14181b;color:#eceff1;border:1px solid #323c43;border-radius:12px;padding:6px;margin-block:6px;box-shadow:0 12px 36px #0009;max-width:min(480px,calc(100dvw - 24px));max-height:min(320px,70dvh);overflow:auto;font:14px/1.4 Onest,system-ui,sans-serif}
+  .admin-design .adm-select option{display:flex;align-items:center;gap:12px;min-height:44px;padding:10px 12px;border-radius:7px;cursor:pointer;white-space:normal;overflow-wrap:anywhere}
+  .admin-design .adm-select option:checked{background:#193122;color:#86efac;font-weight:600}
+  .admin-design .adm-select option:hover,.admin-design .adm-select option:focus-visible{background:#252e34;color:#eceff1;outline:0}
+  .admin-design .adm-select option::checkmark{order:1;margin-inline-start:auto;color:#86efac}
+}
 .admin-design .sheet,.admin-design .center{font-family:Onest,system-ui,sans-serif;background:#121518;border:1px solid #2a3137;color:var(--label)}
 .admin-design .sheet .btn{margin-top:6px}
 .admin-design .sheet .tiles{gap:8px}
