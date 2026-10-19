@@ -28,9 +28,15 @@ const messages = {
   'busy': 'The server is busy. Try again in a moment.',
   'passkey-limit': 'This profile has reached its passkey limit.',
   'credential-exists': 'This passkey already belongs to a profile.',
+  'no such user': 'This profile no longer exists. Refresh the user list.',
+  'cannot disable an admin': 'Administrator profiles cannot be disabled here.',
+  'you cannot delete your own account': 'You cannot delete your own profile.',
+  'cannot delete the last admin': 'The last administrator cannot be deleted.',
+  'no such code': 'This invite code no longer exists. Refresh the invite list.',
+  'already used, cannot revoke': 'This invite code has already been used and cannot be revoked.',
 }
 export function adminError(error) {
-  const code = typeof error === 'string' ? error : error?.data?.code || error?.code
+  const code = typeof error === 'string' ? error : error?.data?.code || error?.data?.error || error?.code
   if (messages[code]) return messages[code]
   if (error?.status === 429) return messages.locked
   if (error?.name === 'NotAllowedError' || error?.name === 'AbortError') return 'The identity prompt was cancelled or timed out.'

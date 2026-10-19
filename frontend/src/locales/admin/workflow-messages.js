@@ -1,4 +1,10 @@
 export const workflowMessages = [
+  ['Local workout data', 'Локальные данные тренировок', 'Mahalliy mashq ma’lumotlari', 'Маҳаллий машқ маълумотлари'],
+  ['Add this device’s workouts to your profile?', 'Добавить тренировки этого устройства в профиль?', 'Bu qurilma mashqlarini profilga qo‘shasizmi?', 'Бу қурилма машқларини профилга қўшасизми?'],
+  ['Add this device’s plan to your profile?', 'Добавить план этого устройства в профиль?', 'Bu qurilma rejasini profilga qo‘shasizmi?', 'Бу қурилма режасини профилга қўшасизми?'],
+  ['This browser has workout data from before sign-in. Add it to this profile, or keep the profile exactly as it is on the server.', 'В браузере есть данные тренировок до входа. Добавьте их в профиль или оставьте данные профиля с сервера.', 'Bu brauzerda kirishdan oldingi mashq ma’lumotlari bor. Ularni profilga qo‘shing yoki serverdagi profilni saqlang.', 'Бу браузерда киришдан олдинги машқ маълумотлари бор. Уларни профилга қўшинг ёки сервердаги профилни сақланг.'],
+  ['Add them', 'Добавить', 'Qo‘shish', 'Қўшиш'],
+  ['Keep profile as is', 'Оставить профиль как есть', 'Profilni o‘z holida qoldirish', 'Профилни ўз ҳолида қолдириш'],
   ['Remove login email', 'Удалить почту для входа', 'Kirish emailini olib tashlash', 'Кириш emailини олиб ташлаш'],
   ['Account deleted', 'Учётная запись удалена', 'Hisob o‘chirildi', 'Ҳисоб ўчирилди'],
   ['User disabled', 'Пользователь отключён', 'Foydalanuvchi o‘chirildi', 'Фойдаланувчи ўчирилди'],

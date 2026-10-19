@@ -55,9 +55,9 @@ function UserDetail({ id, onChanged, close }) {
   const [busy, setBusy] = useState(false)
   const toast = useUI(s => s.toast)
   const openSheet = useUI(s => s.openSheet)
-  const load = () => { setError(''); return api('/api/admin/user?id=' + encodeURIComponent(id)).then(setD).catch(e => setError(e.message)) }
+  const load = () => { setError(''); return api('/api/admin/user?id=' + encodeURIComponent(id)).then(setD).catch(e => setError(adminError(e))) }
   useEffect(() => { load() }, [id])
-  if (!d) return <div className="muted small" role="status">{error || t('Loading…')}{error && <button className="btn" onClick={load}>{t('Try again')}</button>}</div>
+  if (!d) return <div className="muted small" role="status">{error ? t(error) : t('Loading…')}{error && <button className="btn" onClick={load}>{t('Try again')}</button>}</div>
   const u = d.user
   // The document comes straight off the user's state file. PUT /api/data drops null and
   // shapeless entries now, but a file written before it did still answers with them, and this
@@ -79,14 +79,14 @@ function UserDetail({ id, onChanged, close }) {
     setBusy(true)
     return api('/api/admin/user/delete', { method: 'POST', body: JSON.stringify({ id: u.id }) })
       .then(() => { toast(t('Account deleted')); onChanged(); close() })
-      .catch(e => setError(e.message)).finally(() => setBusy(false))
+      .catch(e => setError(adminError(e))).finally(() => setBusy(false))
   }
   const setDisabled = disabled => {
     if (busy) return
     setBusy(true)
     return api('/api/admin/user/disable', { method: 'POST', body: JSON.stringify({ id: u.id, disabled }) })
       .then(() => { toast(t(disabled ? 'User disabled' : 'User enabled')); onChanged(); close() })
-      .catch(e => setError(e.message)).finally(() => setBusy(false))
+      .catch(e => setError(adminError(e))).finally(() => setBusy(false))
   }
   // Password sign-in (#118): the server only sends `password` when the instance offers it. The
   // code comes back once, is shown once, and is never stored anywhere but as a hash.
@@ -115,10 +115,10 @@ function UserDetail({ id, onChanged, close }) {
       <span className="adm-pill">{t("joined")} {date(u.created)}</span>
     </div>
     <div className="tiles" style={{ textAlign: 'start' }}>
-      <div className="tile"><div className="l">{t('Workouts')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{workouts.length}</div></div>
-      <div className="tile"><div className="l">{t("Weigh-ins")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.bodyweight.length}</div></div>
-      <div className="tile"><div className="l">{t("Measurements")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{(d.measurements || []).length}</div></div>
-      <div className="tile"><div className="l">{t("Routines")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.routines.length}</div></div>
+      <div className="tile"><div className="l">{t('Workouts')}</div><div className="v" style={{ fontSize: '1.1rem' }}>{number(workouts.length)}</div></div>
+      <div className="tile"><div className="l">{t("Weigh-ins")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{number(d.bodyweight.length)}</div></div>
+      <div className="tile"><div className="l">{t("Measurements")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{number((d.measurements || []).length)}</div></div>
+      <div className="tile"><div className="l">{t("Routines")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{number(d.routines.length)}</div></div>
       <div className="tile"><div className="l">{t("Last sync")}</div><div className="v" style={{ fontSize: '.95rem' }}>{rel(d.lastSync)}</div></div>
     </div>
     {!u.admin && <>
@@ -159,7 +159,7 @@ function UserDetail({ id, onChanged, close }) {
     {workouts.length ? <div className="list" style={{ gap: 0 }}>
       {workouts.slice(0, 60).map(w => <div key={w.id} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
         <div><div className="small" style={{ fontWeight: 600 }}>{w.name}</div>
-          <div className="dim" style={{ fontSize: '.72rem' }}>{date(w.d)} · {duration((w.end || w.start) - w.start)} · {setsDone(w)} {t("sets")}{w.prs?.length ? ' · ' + w.prs.length + ' PR' : ''}</div></div>
+          <div className="dim" style={{ fontSize: '.72rem' }}>{date(w.d)} · {duration((w.end || w.start) - w.start)} · {number(setsDone(w))} {t("sets")}{w.prs?.length ? ' · ' + number(w.prs.length) + ' PR' : ''}</div></div>
         <span className="small muted">{number(w.vol ?? workoutVolume(w))} {d.unit}</span>
       </div>)}
     </div> : <div className="adm-empty">{t("No workouts logged.")}</div>}
@@ -177,7 +177,7 @@ function InvitesCard({ invites, reload, inviteOnly, error }) {
     if (busy) return
     setBusy(true); setMessage('')
     try { const { invite } = await api('/api/admin/invites/new', { method: 'POST', body: '{}' }); await copy(invite.code); await reload() }
-    catch (e) { setMessage(e.message) }
+    catch (e) { setMessage(adminError(e)) }
     finally { setBusy(false) }
   }
   const revoke = code => confirmSheet({
@@ -187,7 +187,7 @@ function InvitesCard({ invites, reload, inviteOnly, error }) {
       if (busy) return
       setBusy(true)
       try { await api('/api/admin/invites/revoke', { method: 'POST', body: JSON.stringify({ code }) }); toast(t('Code revoked')); await reload() }
-      catch (e) { setMessage(e.message) }
+      catch (e) { setMessage(adminError(e)) }
       finally { setBusy(false) }
     }
   })
@@ -202,7 +202,7 @@ function InvitesCard({ invites, reload, inviteOnly, error }) {
     <div className="row between"><h2 style={{ margin: 0 }}>{t("Invite codes")}</h2>
       <Button variant="primary" size="sm" disabled={busy} onClick={gen} icon="plus">{t("New code")}</Button></div>
     <select className="adm-select" aria-label={t("Invite status")} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{t("All")}</option><option value="unused">{t("Unused")}</option><option value="used">{t("Already used")}</option></select>
-    {error && <p role="alert">{error} <button className="btn" onClick={reload}>{t("Try again")}</button></p>}
+    {error && <p role="alert">{t(error)} <button className="btn" onClick={reload}>{t("Try again")}</button></p>}
     {!invites && !error && <p role="status">{t("Loading…")}</p>}
     {message && <p role="status">{t(message)}</p>}
     {copyValue && <input className="field" aria-label={t("Invite code")} readOnly value={copyValue} onFocus={e => e.target.select()} />}
@@ -227,7 +227,7 @@ function InvitesCard({ invites, reload, inviteOnly, error }) {
         <span style={{ fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', letterSpacing: '.06em' }}>{i.code}</span><span>→ {i.usedByName || 'used'}</span>
       </div>)}
     </> : null}
-    {invites && !open.length && !used.length && <div className="adm-empty">{t("No matching invite codes.")}</div>}
+    {invites && !open.length && !used.length && <div className="adm-empty">{t(invites.length ? "No matching invite codes." : "No invite codes yet.")}</div>}
   </div>
 }
 
@@ -251,7 +251,7 @@ function AuditCard({ tick }) {
       const r = await api('/api/admin/audit?limit=50&cat=' + c + (before ? '&before=' + before : ''))
       if (version !== request.current) return
       setMeta(r); setRows(x => before ? x.concat(r.events || []) : r.events || [])
-    } catch (e) { if (version === request.current) setError(e.message) }
+    } catch (e) { if (version === request.current) setError(adminError(e)) }
     finally { if (version === request.current) setLoading(false) }
   }
   const pick = c => { setCat(c); setRows([]); setMeta(null); load(c) }
@@ -264,13 +264,13 @@ function AuditCard({ tick }) {
     message: t("Every recorded event is deleted. The clear itself is logged, so the gap stays visible."),
     confirmText: t("Clear"), cancelText: t('Cancel'), danger: true,
     onConfirm: () => api('/api/admin/audit/clear', { method: 'POST', body: '{}' })
-      .then(() => { toast(t('Activity log cleared')); pick(cat) }).catch(e => toast(e.message))
+      .then(() => { toast(t('Activity log cleared')); pick(cat) }).catch(e => toast(t(adminError(e))))
   })
 
   if (meta && !meta.enabled) return null      // AUDIT_LOG=0 — the card isn't there at all
 
   return <div className="card">
-    {error && <p role="alert">{error} <button className="btn" onClick={() => load(cat)}>{t('Try again')}</button></p>}
+    {error && <p role="alert">{t(error)} <button className="btn" onClick={() => load(cat)}>{t('Try again')}</button></p>}
     {loading && <p role="status">{t('Loading…')}</p>}
     <div className="row between"><h2 style={{ margin: 0 }}>{t("Activity log")}</h2>
       <button className="iconbtn adm-iconbtn" style={{ color: 'var(--red)' }} onClick={clear} aria-label={t("clear log")}><Icon name="trash" /></button></div>
@@ -366,11 +366,11 @@ export default function Admin() {
       if (!Array.isArray(d?.users)) throw new Error('The server answered without a list of users.')
       setUsers(d.users); setInviteOnly(!!d.invite_only); setUsersErr(null); setLastUpdated(Date.now())
     })
-    .catch(e => { if (e.status === 401 || e.status === 403) { setUsers(null); setInvites(null); setAccessDenied(true) }; setUsersErr(e.message || 'Failed to load') })
+    .catch(e => { if (e.status === 401 || e.status === 403) { setUsers(null); setInvites(null); setAccessDenied(true) }; setUsersErr(adminError(e)) })
   const loadInvites = () => api('/api/admin/invites').then(d => {
     if (!Array.isArray(d.invites)) throw new Error('Could not load invite codes.')
     setInvites(d.invites); setInvitesErr('')
-  }).catch(e => setInvitesErr(e.message))
+  }).catch(e => setInvitesErr(adminError(e)))
   // poll every 15s so the "training now" section stays live without a manual refresh
   useEffect(() => { if (!user?.admin) return; loadUsers(); loadInvites(); const iv = setInterval(loadUsers, 15000); return () => clearInterval(iv) }, [])
   if (!user?.admin) return null
@@ -393,13 +393,13 @@ export default function Admin() {
     {new URLSearchParams(location.hash.split('?')[1] || '').get('authError') && <p role="alert">{t(adminError(new URLSearchParams(location.hash.split('?')[1] || '').get('authError')))}</p>}
     <div className="hdr">
       <div className="adm-title"><h1 style={{ margin: 0 }}>{t(section)}</h1>
-        <div className="sub">{users ? t('{0} users · {1} active this week', users.length, activeCount) : t(usersErr ? 'Could not load' : 'Loading…')}</div></div>
-      <button className="btn" onClick={() => leave(() => setSection('Security'))}>{t('My account → Security')}</button>
-      <button className="btn" onClick={copyLink}>{t('Copy admin link')}</button>
+        {['Overview', 'Users'].includes(section) && <div className="sub">{users ? t('{0} users · {1} active this week', number(users.length), number(activeCount)) : t(usersErr ? 'Could not load' : 'Loading…')}</div>}</div>
+      <button className="btn adm-security-link" onClick={() => leave(() => setSection(section === 'Security' ? 'Overview' : 'Security'))}>{t(section === 'Security' ? 'Back to admin' : 'My account → Security')}</button>
+      <button className="btn adm-copy-link" onClick={copyLink}>{t('Copy admin link')}</button>
       <select className="adm-select" aria-label={t("Admin language")} value={locale} onChange={e => setLocale(e.target.value)}>
         {Object.entries(languages).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select>
-      <button className="iconbtn" onClick={() => { loadUsers(); loadInvites(); setTick(n => n + 1) }} aria-label={t("refresh")}>↻</button>
+      <button className="iconbtn adm-refresh" onClick={() => { loadUsers(); loadInvites(); setTick(n => n + 1) }} aria-label={t("refresh")}>↻</button>
     </div>
     {showLeave && <dialog ref={leaveDialog} className="card adm-leave" role="alertdialog" aria-label={t('Unsaved changes')} onCancel={e => { e.preventDefault(); stay() }}>
       <p>{t('Discard unsaved changes?')}</p>
@@ -407,8 +407,8 @@ export default function Admin() {
       <button className="btn danger" onClick={discard}>{t('Discard changes')}</button>
     </dialog>}
     {copyStatus && <div role="status"><p>{t(copyStatus)}</p><input className="field" aria-label={t("Admin link")} readOnly value={adminLink} onFocus={e => e.target.select()} /></div>}
-    {lastUpdated && <p className="adm-hint">{t('Last updated')}: {new Date(lastUpdated).toLocaleString(locale)}</p>}
-    <div className="adm-intro">{t("Manage accounts, invitations, Coach and activity. Account details include available workout history and summaries; downloads are not complete backups.")} </div>
+    {lastUpdated && ['Overview', 'Users'].includes(section) && <p className="adm-hint">{t('Last updated')}: {new Date(lastUpdated).toLocaleString(locale)}</p>}
+    {section === 'Overview' && <div className="adm-intro">{t("Manage accounts, invitations, Coach and activity. Account details include available workout history and summaries; downloads are not complete backups.")}</div>}
 
     {usersErr && <div className="card" role="alert" style={{ borderColor: 'var(--red)' }}>
       <div className="row between"><h2 style={{ margin: 0 }}>{t(users ? 'The last update failed' : 'Could not load the users')}</h2>
@@ -419,10 +419,10 @@ export default function Admin() {
     </div>}
 
     {section === 'Overview' && <div className="tiles" style={{ marginBottom: 12 }}>
-      <button className="tile" onClick={() => setSection('Users')}><div className="l">{t("Users")}</div><div className="v">{users ? users.length : '–'}</div></button>
-      <button className="tile" onClick={() => setSection('Activity')}><div className="l">{t("Training now")}</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? liveUsers.length : '–'}</div></button>
-      <button className="tile" onClick={() => setSection('Users')}><div className="l">{t("Active 7 days")}</div><div className="v">{users ? activeCount : '–'}</div></button>
-      <button className="tile" onClick={() => { setStatus('disabled'); setSection('Users') }}><div className="l">{t("Disabled")}</div><div className="v">{users ? disabledCount : '–'}</div></button>
+      <button className="tile" onClick={() => setSection('Users')}><div className="l">{t("Users")}</div><div className="v">{users ? number(users.length) : '–'}</div></button>
+      <button className="tile" onClick={() => setSection('Activity')}><div className="l">{t("Training now")}</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? number(liveUsers.length) : '–'}</div></button>
+      <button className="tile" onClick={() => setSection('Users')}><div className="l">{t("Active 7 days")}</div><div className="v">{users ? number(activeCount) : '–'}</div></button>
+      <button className="tile" onClick={() => { setStatus('disabled'); setSection('Users') }}><div className="l">{t("Disabled")}</div><div className="v">{users ? number(disabledCount) : '–'}</div></button>
     </div>}
 
     <div className={section === 'Overview' ? 'adm-overview' : undefined}>
@@ -432,7 +432,7 @@ export default function Admin() {
       {!liveUsers.length && <p>{t(users ? 'No sessions running now.' : usersErr ? 'Could not load the users' : 'Loading…')}</p>}
       {liveUsers.map(u => <button key={u.id} className="row between adm-live-user" style={{ padding: '8px 2px', borderBottom: 'var(--hair) solid var(--sep)' }} onClick={() => openUser(u.id)}>
         <div><div className="small" style={{ fontWeight: 600 }}>{u.name}</div>
-          <div className="dim" style={{ fontSize: '.72rem' }}>{u.live.name} {t("· exercise")} {u.live.exIdx} {t("of")} {u.live.exTotal} · {u.live.setsDone}/{u.live.setsTotal} {t("sets")}</div></div>
+          <div className="dim" style={{ fontSize: '.72rem' }}>{u.live.name} {t("· exercise")} {number(u.live.exIdx)} {t("of")} {number(u.live.exTotal)} · {number(u.live.setsDone)}/{number(u.live.setsTotal)} {t("sets")}</div></div>
         <span className="adm-pill acc">{duration(Date.now() - u.live.startedAt)}</span>
       </button>)}
     </div>}
@@ -456,7 +456,7 @@ export default function Admin() {
       <div className="list">
         {(section === 'Overview' ? filteredUsers.slice(0, 5) : filteredUsers).map(u => <button key={u.id} className="item" onClick={() => openUser(u.id)}>
           <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginInlineEnd: 5 }} />}{u.name} {u.admin && <span className="adm-pill acc" style={{ marginInlineStart: 4 }}>{t("admin")}</span>}{u.disabled && <span className="adm-pill bad" style={{ marginInlineStart: 4 }}>{t("disabled")}</span>}</div>
-            <div className="ss">{u.live ? t('Training now') + ' · ' + u.live.name : t('{0} workouts · last sync {1}', u.workouts, rel(u.lastSync))}{u.lastWorkout && ' · ' + t('Last workout') + ' ' + date(u.lastWorkout)}</div>
+            <div className="ss">{u.live ? t('Training now') + ' · ' + u.live.name : t('{0} workouts · last sync {1}', number(u.workouts), rel(u.lastSync))}{u.lastWorkout && ' · ' + t('Last workout') + ' ' + date(u.lastWorkout)}</div>
             {u.email && <div className="ss" title={t("sign-in e-mail")}>{u.email}</div>}</div>
           {u.hasPush && <Icon name="bell" title={t("push notifications on")} style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
         </button>)}
@@ -468,7 +468,7 @@ export default function Admin() {
 
     {section === 'Overview' && <section className="card">
       <h2>{t('Invites')}</h2>
-      <p>{t('Unused')}: {invites ? invites.filter(i => !i.usedBy).length : '—'}</p>
+      <p>{t('Unused')}: {invites ? number(invites.filter(i => !i.usedBy).length) : '–'}</p>
       <button className="btn" onClick={() => setSection('Invites')}>{t('Manage invites')}</button>
       <h2>{t('AI Coach')}</h2>
       <button className="btn" onClick={() => setSection('AI Coach')}>{t('Configure Coach')}</button>

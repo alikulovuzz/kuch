@@ -2253,4 +2253,5 @@ export default {
   'Your sports watch, calling you back.': 'นาฬิกาสปอร์ตเรียกคุณกลับมาแล้ว',
   'Coach wants you back on the bar.': 'โค้ชอยากให้คุณกลับมาที่บาร์',
   'Gentle, for headphones or a quiet room.': 'เบา ๆ สำหรับหูฟังหรือห้องที่เงียบ',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "การลบพาสคีย์นี้จะออกจากระบบในอุปกรณ์อื่นทั้งหมด โทรศัพท์ที่จับคู่ไว้ต้องจับคู่ใหม่",
 }

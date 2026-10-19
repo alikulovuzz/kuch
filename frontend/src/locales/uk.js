@@ -2239,4 +2239,5 @@ export default {
   'Your sports watch, calling you back.': 'Ваш спортивний годинник кличе вас назад.',
   'Coach wants you back on the bar.': 'Тренер чекає вас назад біля штанги.',
   'Gentle, for headphones or a quiet room.': 'Тихий, для навушників або спокійної кімнати.',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "Видалення цього ключа доступу завершить сеанси на всіх інших пристроях. Підключені телефони потрібно буде підключити знову.",
 }

@@ -23,13 +23,14 @@ export function plainHttp(raw) {
 
 
 // `server`: the address the token is most likely for (the one being typed into ConnectSheet).
-const openCfAccess = server => useUI.getState().openSheet(close => <CfAccessSheet close={close} server={server} />)
+const openCfAccess = (server, translate) => useUI.getState().openSheet(close => <CfAccessSheet close={close} server={server} translate={translate} />)
 
 // A server behind Cloudflare Access (lib/cf-access.js): the service token that lets this phone
 // through, entered before pairing because the pairing request has to get through as well. It is
 // saved with the address of its server and only ever sent there, so the sheet asks for that
 // address too and says it: a stored token shows the server it belongs to, not `server`.
-export function CfAccessSheet({ close, server = '' }) {
+export function CfAccessSheet({ close, server = '', translate = t }) {
+  const tr = translate
   const [addr, setAddr] = useState(typeof server === 'string' ? server : '')
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
@@ -40,25 +41,25 @@ export function CfAccessSheet({ close, server = '' }) {
     loadCfAccess().then(c => { if (c) { setClientId(c.clientId); setClientSecret(c.clientSecret); setHad(true); if (c.origin) setAddr(c.origin) } })
   }, [])
   const save = async (id, secret) => {
-    if (!!id.trim() !== !!secret.trim()) { useUI.getState().toast(t('Enter both the Client ID and the Client Secret')); return }
-    if (id.trim() && !origin) { useUI.getState().toast(t('Enter the address of the server this token is for')); return }
+    if (!!id.trim() !== !!secret.trim()) { useUI.getState().toast(tr('Enter both the Client ID and the Client Secret')); return }
+    if (id.trim() && !origin) { useUI.getState().toast(tr('Enter the address of the server this token is for')); return }
     setBusy(true)
     try {
       const saved = await saveCfAccess({ clientId: id, clientSecret: secret, server: origin })
       close()
-      useUI.getState().toast(saved ? t('Saved') : t('Removed'))
-    } catch (e) { useUI.getState().toast(e.message || t('Could not save')) }
+      useUI.getState().toast(saved ? tr('Saved') : tr('Removed'))
+    } catch (e) { useUI.getState().toast(e.message || tr('Could not save')) }
     finally { setBusy(false) }
   }
   return <>
-    <h3>{t('Cloudflare Access')}</h3>
+    <h3>{tr('Cloudflare Access')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>
-      {t('Only if your server is behind Cloudflare Access: the service token this phone sends with every request to it. Kept in this phone’s secure storage.')}
+      {tr('Only if your server is behind Cloudflare Access: the service token this phone sends with every request to it. Kept in this phone’s secure storage.')}
     </div>
-    <input className="input" placeholder={t('Server address (e.g. gym.example.com)')} value={addr} aria-label={t('Server address (e.g. gym.example.com)')}
+    <input className="input" placeholder={tr('Server address (e.g. gym.example.com)')} value={addr} aria-label={tr('Server address (e.g. gym.example.com)')}
       onChange={e => setAddr(e.target.value)} autoCapitalize="none" autoCorrect="off" inputMode="url" />
     {origin && <div className="dim small" role="note" style={{ marginTop: 8, lineHeight: 1.45, overflowWrap: 'anywhere' }}>
-      {t('Sent only to {0}, never to another server.', new URL(origin).host)}
+      {tr('Sent only to {0}, never to another server.', new URL(origin).host)}
     </div>}
     <div style={{ height: 10 }} />
     <input className="input" placeholder="CF-Access-Client-Id" value={clientId}
@@ -67,10 +68,10 @@ export function CfAccessSheet({ close, server = '' }) {
     <input className="input" type="password" placeholder="CF-Access-Client-Secret" value={clientSecret}
       onChange={e => setClientSecret(e.target.value)} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="off" />
     <div style={{ height: 12 }} />
-    <Button variant="primary" onClick={() => save(clientId, clientSecret)} disabled={busy}>{t('Save')}</Button>
+    <Button variant="primary" onClick={() => save(clientId, clientSecret)} disabled={busy}>{tr('Save')}</Button>
     {had && <>
       <div style={{ height: 10 }} />
-      <Button icon="trash" onClick={() => save('', '')} disabled={busy}>{t('Remove')}</Button>
+      <Button icon="trash" onClick={() => save('', '')} disabled={busy}>{tr('Remove')}</Button>
     </>}
   </>
 }
@@ -78,7 +79,8 @@ export function CfAccessSheet({ close, server = '' }) {
 // `again`: a phone whose server stopped accepting it (components/ServerSync.jsx pairAgain) — the
 // address it had is filled in when it still has one, so only the new code is left to type, and
 // the sheet says that what the phone kept is merged, not replaced.
-export function ConnectSheet({ close, initialUrl = '', again = false }) {
+export function ConnectSheet({ close, initialUrl = '', again = false, translate = t }) {
+  const tr = translate
   const { connectToServer } = useStore()
   const [url, setUrl] = useState(initialUrl)
   const [code, setCode] = useState('')
@@ -90,33 +92,33 @@ export function ConnectSheet({ close, initialUrl = '', again = false }) {
   const codeRef = useRef(null)
   useEffect(() => { setTimeout(() => (initialUrl ? codeRef : ref).current?.focus(), 250) }, [])
   const go = async () => {
-    if (!url.trim() || !code.trim()) { useUI.getState().toast(t('Enter your server address and the code')); return }
+    if (!url.trim() || !code.trim()) { useUI.getState().toast(tr('Enter your server address and the code')); return }
     setBusy(true)
     setError('')
-    try { await connectToServer(url.trim(), code.trim(), askAddDeviceData); close(); useUI.getState().toast(t('Connected')) }
-    catch (e) { setError(e.message || t('Could not connect')) }
+    try { await connectToServer(url.trim(), code.trim(), askAddDeviceData); close(); useUI.getState().toast(tr('Connected')) }
+    catch (e) { setError(e.message || tr('Could not connect')) }
     finally { setBusy(false) }
   }
   return <>
-    <h3>{again ? t('Pair again') : t('Connect to my server')}</h3>
+    <h3>{again ? tr('Pair again') : tr('Connect to my server')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>
       {again
-        ? t('Open Settings → Account → “Pair the mobile app” on your Kuch site in a browser and enter the new code shown there. What this phone kept is merged into your account.')
-        : t('Open Settings → Account → “Pair the mobile app” on the Kuch site you’re already signed into, then enter its address and the code shown there.')}
+        ? tr('Open Settings → Account → “Pair the mobile app” on your Kuch site in a browser and enter the new code shown there. What this phone kept is merged into your account.')
+        : tr('Open Settings → Account → “Pair the mobile app” on the Kuch site you’re already signed into, then enter its address and the code shown there.')}
     </div>
-    <input ref={ref} className="input" placeholder={t('Server address (e.g. gym.example.com)')} value={url}
+    <input ref={ref} className="input" placeholder={tr('Server address (e.g. gym.example.com)')} value={url}
       onChange={e => setUrl(e.target.value)} autoCapitalize="none" autoCorrect="off" inputMode="url" />
     {plainHttp(url) && <div className="dim small" role="note" style={{ marginTop: 8, lineHeight: 1.45 }}>
-      {t('Plain http:// isn’t encrypted. Fine on your home network, but use https:// if your server is reachable from the internet.')}
+      {tr('Plain http:// isn’t encrypted. Fine on your home network, but use https:// if your server is reachable from the internet.')}
     </div>}
     <div style={{ height: 10 }} />
-    <input ref={codeRef} className="input" placeholder={t('Pairing code')} maxLength={8} value={code}
+    <input ref={codeRef} className="input" placeholder={tr('Pairing code')} maxLength={8} value={code}
       onChange={e => setCode(e.target.value.toUpperCase())} style={{ letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} />
     {error && <div className="small" role="alert" style={{ color: 'var(--red)', marginTop: 10, lineHeight: 1.45, overflowWrap: 'anywhere' }}>{error}</div>}
     <div style={{ height: 12 }} />
-    <Button variant="primary" onClick={go} disabled={busy}>{busy ? t('Connecting…') : t('Connect')}</Button>
+    <Button variant="primary" onClick={go} disabled={busy}>{busy ? tr('Connecting…') : tr('Connect')}</Button>
     <div style={{ height: 10 }} />
-    <Button icon="key" onClick={() => openCfAccess(normalizeServerUrl(url) || '')} disabled={busy}>{t('Cloudflare Access')}</Button>
+    <Button icon="key" onClick={() => openCfAccess(normalizeServerUrl(url) || '', tr)} disabled={busy}>{tr('Cloudflare Access')}</Button>
   </>
 }
 

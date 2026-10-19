@@ -13,11 +13,11 @@ const strings = node => {
   if (node.type === 'StringLiteral') keys.add(node.value)
   if (node.type === 'ConditionalExpression') { strings(node.consequent); strings(node.alternate) }
 }
-for (const name of ['Admin', 'AdminCoach', 'AdminSecurity', 'AdminSignIn', 'AdminAccess']) {
+for (const name of ['Admin', 'AdminCoach', 'AdminSecurity', 'AdminSignIn', 'AdminAccess', 'MobileOnboarding']) {
   const ast = parse(fs.readFileSync(new URL(`../views/${name}.jsx`, import.meta.url), 'utf8'), { sourceType: 'module', plugins: ['jsx'] })
   const visit = node => {
     if (!node || typeof node !== 'object') return
-    if (node.type === 'CallExpression' && ['t', 'setMessage', 'setError', 'setLoadError'].includes(node.callee?.name)) strings(node.arguments[0])
+    if (node.type === 'CallExpression' && (name === 'MobileOnboarding' ? node.callee?.name === 'tr' : ['t', 'setMessage', 'setError', 'setLoadError'].includes(node.callee?.name))) strings(node.arguments[0])
     // The two small maps feed t(variable); their values are user-facing copy.
     if (node.type === 'VariableDeclarator' && ['credentialLabel', 'failureTitle'].includes(node.id?.name)) {
       const collect = n => { if (!n || typeof n !== 'object') return; if (n.type === 'ObjectProperty') strings(n.value); for (const v of Object.values(n)) if (Array.isArray(v)) v.forEach(collect); else if (v && typeof v === 'object') collect(v) }

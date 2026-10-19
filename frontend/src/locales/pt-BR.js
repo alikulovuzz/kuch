@@ -1403,6 +1403,7 @@ export const PT_BR_OVERRIDES = {
   'Gentle, for headphones or a quiet room.': 'Suave, para fones de ouvido ou um lugar silencioso.',
   'Fewer than two workouts in this period. Pick a longer one.': 'Menos de dois treinos neste período. Escolha um mais longo.',
   'Releases are checked on GitHub. The download is verified against its checksum before the installer opens.': 'As versões são verificadas no GitHub. O download é conferido pela soma de verificação antes de abrir o instalador.',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "Remover esta chave de acesso encerra sua sessão em todos os outros dispositivos. Os celulares pareados precisarão ser pareados novamente.",
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

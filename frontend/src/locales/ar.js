@@ -2297,4 +2297,5 @@ export default {
   'Your sports watch, calling you back.': 'ساعتك الرياضية تناديك للعودة.',
   'Coach wants you back on the bar.': 'المدرب يريدك أن تعود إلى البار.',
   'Gentle, for headphones or a quiet room.': 'هادئ، للسماعات أو لغرفة هادئة.',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "إزالة مفتاح المرور هذا تسجّلك خروجك من كل الأجهزة الأخرى. يجب إقران الهواتف مجددًا.",
 }

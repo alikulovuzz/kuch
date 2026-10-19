@@ -6,7 +6,7 @@ import AdminSignIn from './AdminSignIn.jsx'
 const state = vi.hoisted(() => ({ config: { password_login: true }, setUser: vi.fn(), adoptProfile: vi.fn() }))
 vi.mock('../store/useStore.js', () => ({ useStore: fn => fn(state) }))
 vi.mock('../sheets.jsx', () => ({ askAddDeviceData: vi.fn() }))
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }))
+vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn(), useLocation: () => ({ search: '' }) }))
 let root
 afterEach(() => { act(() => root?.unmount()); localStorage.clear() })
 it('offers password recovery without losing the entered email when language changes', () => {

@@ -120,12 +120,15 @@ test('Google sign-in binds state to this browser and rejects unknown identities 
   const code = Buffer.from(JSON.stringify({ nonce: target.searchParams.get('nonce') })).toString('base64url');
   const callback = base + '/api/auth/google/callback?state=' + target.searchParams.get('state') + '&code=' + code;
   const noCookie = await fetch(callback, { redirect: 'manual' });
-  assert.equal(noCookie.status, 400);
+  assert.equal(noCookie.status, 303);
+  assert.match(noCookie.headers.get('location'), /authError=google-state$/);
   const result = await fetch(callback, { redirect: 'manual', headers: { Cookie: started.headers.getSetCookie()[0].split(';')[0] } });
   assert.equal(result.status, 303);
   assert.match(result.headers.get('location'), /\/gym\/#\/admin\?authError=google-unlinked$/);
   assert.equal((await fetch(base + '/api/me')).status, 401);
-  assert.equal((await fetch(callback, { redirect: 'manual', headers: { Cookie: started.headers.getSetCookie()[0].split(';')[0] } })).status, 400);
+  const replay = await fetch(callback, { redirect: 'manual', headers: { Cookie: started.headers.getSetCookie()[0].split(';')[0] } });
+  assert.equal(replay.status, 303);
+  assert.match(replay.headers.get('location'), /authError=google-state$/);
 });
 
 test('Google callback rejects wrong audience, issuer, nonce, signature and expired tokens', async t => {
@@ -153,6 +156,20 @@ test('Google identity conflicts and disabled profiles cannot sign in or merge', 
   }
   const security = await fetch(h.base + '/api/account/security', { headers: { Cookie: h.cookie } });
   assert.equal((await security.json()).google.linked, false);
+});
+
+test('linking rejects a Google identity whose verified email belongs to another profile', async t => {
+  const h = await start(t, true, { users: [{ id: 'other', name: 'Other', email: 'other@example.test', emailVerified: 'other@example.test' }] });
+  const started = await fetch(h.base + '/api/account/google/link', { method: 'POST', headers: { Cookie: h.cookie }, body: JSON.stringify({ current: 'a strong fixture password' }) });
+  assert.equal(started.status, 200);
+  const target = new URL((await started.json()).url);
+  const code = Buffer.from(JSON.stringify({ nonce: target.searchParams.get('nonce'), sub: 'fresh-google-person', email: 'OTHER@example.test', email_verified: true })).toString('base64url');
+  const callback = await fetch(h.base + '/api/auth/google/callback?state=' + target.searchParams.get('state') + '&code=' + code,
+    { redirect: 'manual', headers: { Cookie: h.cookie + '; ' + started.headers.getSetCookie()[0].split(';')[0] } });
+  assert.match(callback.headers.get('location'), /authError=google-conflict$/);
+  assert.equal(callback.headers.getSetCookie().some(value => value.startsWith('gymsid=')), false);
+  const security = await (await fetch(h.base + '/api/account/security', { headers: { Cookie: h.cookie } })).json();
+  assert.equal(security.google.linked, false);
 });
 
 test('Google confirmation requires a fresh provider authentication time', async t => {

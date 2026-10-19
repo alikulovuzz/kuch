@@ -21,7 +21,7 @@ globalThis.fetch = async (url, options) => {
   if (String(url) === 'https://oauth2.googleapis.com/token') {
     const params = new URLSearchParams(options.body);
     const claims = JSON.parse(Buffer.from(params.get('code'), 'base64url').toString());
-    const token = await new SignJWT({ nonce: claims.nonce, auth_time: claims.auth_time ?? Math.floor(Date.now() / 1000) }).setProtectedHeader({ alg: 'RS256', kid: 'fixture' })
+    const token = await new SignJWT({ nonce: claims.nonce, auth_time: claims.auth_time ?? Math.floor(Date.now() / 1000), email: claims.email, email_verified: claims.email_verified }).setProtectedHeader({ alg: 'RS256', kid: 'fixture' })
       .setSubject(claims.sub || 'google-person').setIssuer(claims.issuer || 'https://accounts.google.com')
       .setAudience(claims.aud || 'fixture-client').setIssuedAt().setExpirationTime(claims.exp || '5m').sign(claims.badSignature ? rogueKey : privateKey);
     return Response.json({ id_token: token });

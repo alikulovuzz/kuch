@@ -6,6 +6,7 @@ import { adminApi as api } from '../lib/admin-api.js'
 import Icon from '../components/Icon.jsx'
 import { Button, Switch, TextArea, TextField } from '../components/ui.jsx'
 import { confirmSheet } from '../sheets.jsx'
+import { adminError } from '../lib/admin-errors.js'
 
 /* The operator's side of the Coach, laid out as a guided setup: one master switch, numbered
    steps that each say what they are for, and everything an owner rarely needs folded away
@@ -45,7 +46,8 @@ const RUNTIME_IDS = ['claude', 'codex']
 const TESTING_IDS = ['fixture']
 
 export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
-  const { t, relative: rel } = useAdminLanguage()
+  const { locale, t, number, relative: rel } = useAdminLanguage()
+  const seconds = ms => new Intl.NumberFormat(locale, { style: 'unit', unit: 'second', unitDisplay: 'short' }).format(Math.round(ms / 1000))
   const toast = useUI(s => s.toast)
   const openSheet = useUI(s => s.openSheet)
   const [saved, setD] = useState(null)
@@ -53,6 +55,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
   const [capsDraft, setCapsDraft] = useState(null)
   const [loadError, setLoadError] = useState('')
   const [headersDraft, setHeadersDraft] = useState(null)
+  const [credentialDirty, setCredentialDirty] = useState(false)
   const d = saved ? { ...saved, ...draft, caps: capsDraft || saved.caps } : null
   const [busy, setBusy] = useState(false)
   // The models the endpoint serves, fetched on demand. Seeded from the status call when the
@@ -66,9 +69,9 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
   // that once per boot, and the Plan tab's Coach card hangs off it: without the re-read, an admin
   // who has just switched the Coach on and connected it finds no Coach anywhere until a reload,
   // which reads as a setup that failed (Discord #install-help, 2026-09-19).
-  const load = () => api('/api/admin/coach').then(r => { setD(r); setLoadError(''); setModels(r.knownModels || null); useStore.getState().refreshConfig() }).catch(e => { setLoadError(e.message || 'Failed to load'); toast(e.message || 'Failed to load') })
+  const load = () => api('/api/admin/coach').then(r => { setD(r); setLoadError(''); setModels(r.knownModels || null); useStore.getState().refreshConfig() }).catch(e => { setLoadError(adminError(e)); toast(t(adminError(e))) })
   useEffect(() => { load() }, [tick])
-  useEffect(() => { onDirty(!!Object.keys(draft).length || !!capsDraft || headersDraft !== null) }, [draft, capsDraft, headersDraft])
+  useEffect(() => { onDirty(!!Object.keys(draft).length || !!capsDraft || headersDraft !== null || credentialDirty) }, [draft, capsDraft, headersDraft, credentialDirty])
 
   const save = async body => {
     if (busy) return
@@ -92,11 +95,10 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
       setTestResult(r => r ? { ...r, outdated: true } : null)
       await load()
     }
-    catch (e) { toast(e.message) }
+    catch (e) { toast(t(adminError(e))) }
     setBusy(false)
   }
   const patch = body => {
-    if ('enabled' in body || 'community' in body) return save(body)
     if (body.caps) setCapsDraft(body.caps)
     else setDraft(current => ({ ...current, ...body }))
     setTestResult(r => r ? { ...r, outdated: true } : null)
@@ -105,8 +107,8 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
     setBusy(true)
     try {
       const r = await api('/api/admin/coach/models', { method: 'POST', body: '{}' })
-      if (r.ok) { setModels(r.models); toast(t('{0} models', r.models.length)) } else toast(r.error || t('Could not list models'))
-    } catch (e) { toast(e.message) }
+      if (r.ok) { setModels(r.models); toast(t('{0} models', number(r.models.length))) } else toast(t(adminError(r.error || 'Could not list models')))
+    } catch (e) { toast(t(adminError(e))) }
     setBusy(false)
   }
   const test = async () => {
@@ -118,7 +120,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
       setTestResult(r)
       toast(t(r.ok ? 'Coach test passed ✅' : 'Test failed'))
       await load()
-    } catch (e) { setTestResult({ ok: false, error: e.message }); toast(e.message) }
+    } catch (e) { setTestResult({ ok: false, error: adminError(e) }); toast(t(adminError(e))) }
     setBusy(false)
   }
   // Keep incomplete drafts visible; save validates them before converting to numbers.
@@ -128,9 +130,16 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
   }
   const disconnect = async () => {
     setBusy(true)
-    try { await api('/api/admin/coach/disconnect', { method: 'POST', body: JSON.stringify({ provider: d.provider }) }); toast(t("Credential removed")); await load() }
-    catch (e) { toast(e.message) }
+    try { await api('/api/admin/coach/disconnect', { method: 'POST', body: JSON.stringify({ provider: d.provider }) }); toast(t("Credential removed")); setTestResult(r => r ? { ...r, outdated: true } : null); await load() }
+    catch (e) { toast(t(adminError(e))) }
     setBusy(false)
+  }
+  const openCredential = (Component, props) => {
+    let handle
+    const draftChanged = changed => { setCredentialDirty(changed); handle?.lock(changed) }
+    handle = openSheet(close => <Component {...props} onDraft={draftChanged}
+      close={() => { setCredentialDirty(false); close() }}
+      onDone={() => { setCredentialDirty(false); setTestResult(r => r ? { ...r, outdated: true } : null); load() }} />)
   }
 
   if (!d) return <div className="card"><div className="muted small" role="status">{t(loadError || 'Loading Coach status…')}</div>{loadError && <button className="btn" onClick={load}>{t("Try again")}</button>}</div>
@@ -193,15 +202,18 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
         <div><Icon name="shield" /><span><b>{t("Private by design.")}</b> {t("A strict allowlist decides what leaves; every change needs the user's yes and can be undone.")}</span></div>
         <div><Icon name="person" /><span><b>{t("Each user decides.")}</b> {t("Turning it on only makes the Coach available; every person consents for themselves.")}</span></div>
       </div>
-      <Button variant="primary" icon="sparkles" disabled={busy} onClick={() => patch({ enabled: true })}>{t("Set up the Coach")}</Button>
+      {saved.enabled
+        ? <><Button variant="primary" disabled={busy} onClick={() => save(draft)}>{t("Save changes")}</Button>
+          <Button disabled={busy} onClick={() => setDraft({})}>{t("Discard changes")}</Button></>
+        : <Button variant="primary" icon="sparkles" disabled={busy} onClick={() => patch({ enabled: true })}>{t("Set up the Coach")}</Button>}
     </div>
   </div>
 
   return <div className="card" style={{ borderColor: live ? 'var(--acc)' : undefined }}>
     {loadError && <p role="alert">{t(loadError)} <button onClick={load}>{t("Try again")}</button></p>}
     <div className="adm-actions">
-      <Button disabled={busy || (!Object.keys(draft).length && headersDraft === null)} onClick={() => save(draft)}>{t("Save changes")}</Button>
-      <Button disabled={busy || !capsDraft} onClick={() => save({ caps: capsDraft })}>{t("Save usage limits")}</Button>
+      <Button variant="primary" disabled={busy || (!Object.keys(draft).length && headersDraft === null)} onClick={() => save(draft)}>{t("Save changes")}</Button>
+      <Button variant="tinted" disabled={busy || !capsDraft} onClick={() => save({ caps: capsDraft })}>{t("Save usage limits")}</Button>
     </div>
     {providerPending && <p role="status">{t('Save the provider selection before editing credentials or listing models.')}</p>}
     <div className="row between" style={{ marginBottom: 2 }}>
@@ -215,7 +227,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
     {!live && <div className="adm-progress" aria-hidden="true"><i style={{ width: Math.round(doneCount / flags.length * 100) + '%' }} /></div>}
     <div className="adm-lead">
       {live ? t("Users find the Coach under Plan → Coach. This switch is the only place it can be turned off for everyone.")
-        : t('{0} of {1} steps done. Finish the open step and the next one unfolds.', doneCount, flags.length)}
+        : t('{0} of {1} steps done. Finish the open step and the next one unfolds.', number(doneCount), number(flags.length))}
     </div>
 
     {d.enabled && <>
@@ -250,7 +262,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
               const cur = headersToText(d.headers)
               if (e.target.value === cur) return
               const p = parseHeadersText(e.target.value)
-              if (p.error) { toast(p.error); e.target.value = cur; return }
+              if (p.error) { toast(t('Use one Name: value header per line.')); e.target.value = cur; return }
               patch({ headers: p.headers })
             }} />
         </div>
@@ -266,7 +278,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
           <div className="adm-hint">{d.auth.account ? t('Connected as {0}', d.auth.account) : t('Connected')} {t("via")} {t(credentialLabel(d.auth.type))}{d.auth.connectedAt ? ' · ' + t('added {0}', rel(d.auth.connectedAt)) : ''}{t(". The key is stored encrypted and is never shown again.")}</div>
           <div className="adm-actions">
             {meta.apiKey && <Button size="sm" variant="tinted" icon="lock" disabled={busy || providerPending}
-              onClick={() => openSheet(close => <ApiKeySheet close={close} onDone={load} label={meta.label} placeholder={meta.keyPlaceholder} optional={meta.keyOptional} />)}>{t("Replace key")}</Button>}
+              onClick={() => openCredential(ApiKeySheet, { label: meta.label, placeholder: meta.keyPlaceholder, optional: meta.keyOptional })}>{t("Replace key")}</Button>}
             {/* The key is encrypted at rest and never shown again, so this is the one action on the
                 card that cannot be walked back. Every other irreversible action in the app asks first;
                 until 2026-09-22 this one did not. */}
@@ -284,9 +296,9 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
             : t("Paste an API key from the provider's console. It is stored encrypted on this server and sent to the provider only while a job runs.")}</div>}
           <div className="adm-actions">
             {meta.setupToken && <Button size="sm" variant="primary" icon="key" disabled={busy || providerPending}
-              onClick={() => openSheet(close => <SetupTokenSheet close={close} onDone={load} label={meta.label} />)}>{t("Add Claude Code token")}</Button>}
+              onClick={() => openCredential(SetupTokenSheet, { label: meta.label })}>{t("Add Claude Code token")}</Button>}
             {meta.apiKey && <Button size="sm" variant={meta.setupToken ? undefined : 'primary'} icon="lock" disabled={busy || providerPending}
-              onClick={() => openSheet(close => <ApiKeySheet close={close} onDone={load} label={meta.label} placeholder={meta.keyPlaceholder} optional={meta.keyOptional} />)}>
+              onClick={() => openCredential(ApiKeySheet, { label: meta.label, placeholder: meta.keyPlaceholder, optional: meta.keyOptional })}>
               {meta.keyOptional ? t("Add API key (optional)") : t("Add API key")}</Button>}
           </div>
         </>}
@@ -310,7 +322,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
         </div>
         {meta.http && <div className="adm-actions">
           <Button size="sm" variant="tinted" icon="reset" disabled={busy || providerPending} onClick={loadModels}>{models ? t("Refresh list") : t("List models")}</Button>
-          {models && models.length ? <span className="dim small" style={{ alignSelf: 'center' }}>{models.length} {t("served by the provider")}</span> : null}
+          {models && models.length ? <span className="dim small" style={{ alignSelf: 'center' }}>{number(models.length)} {t("served by the provider")}</span> : null}
         </div>}
       </Step>
 
@@ -389,7 +401,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
         <summary>{t("Activity")} <Icon name="chevronRight" className="chev" /></summary>
         <div className="adm-fold-b">
           <div className="tiles" style={{ textAlign: 'start', marginBottom: 10 }}>
-            <div className="tile"><div className="l">{t("Jobs today")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.jobsToday}</div></div>
+            <div className="tile"><div className="l">{t("Jobs today")}</div><div className="v" style={{ fontSize: '1.1rem' }}>{number(d.jobsToday)}</div></div>
             <div className="tile"><div className="l">{t("Last success")}</div><div className="v" style={{ fontSize: '.85rem' }}>{rel(d.lastSuccess?.at)}</div></div>
           </div>
           {d.lastError && <>
@@ -403,7 +415,7 @@ export default function AdminCoach({ tick = 0, onDirty = () => {} }) {
           <div className="adm-group-t">{t("Recent jobs")}</div>
           {d.recent?.length ? <div className="adm-log">
             {d.recent.slice(0, 10).map((e, i) => <div key={i} className="adm-log-row">
-              <span>{e.kind === 'create' ? t("Plan") : t("Review")}{e.trigger === 'scheduled' ? t(" · scheduled") : ''} · <span style={{ color: e.outcome === 'failed' ? 'var(--red)' : e.outcome === 'ready' ? 'var(--acc)' : 'var(--label-2)' }}>{t(e.outcome)}</span>{e.ms ? ' · ' + Math.round(e.ms / 1000) + ' s' : ''}</span>
+              <span>{e.kind === 'create' ? t("Plan") : t("Review")}{e.trigger === 'scheduled' ? t(" · scheduled") : ''} · <span style={{ color: e.outcome === 'failed' ? 'var(--red)' : e.outcome === 'ready' ? 'var(--acc)' : 'var(--label-2)' }}>{t(e.outcome)}</span>{e.ms ? ' · ' + seconds(e.ms) : ''}</span>
               <span className="when">{rel(e.at)}</span>
             </div>)}
           </div> : <div className="adm-empty">{t("No jobs yet.")}</div>}
@@ -468,7 +480,7 @@ const failureTitle = cls => ({
 
 /* ------------------------------- setup token -------------------------------- */
 
-function SetupTokenSheet({ close, onDone, label }) {
+function SetupTokenSheet({ close, onDone, onDraft = () => {}, label }) {
   const { t } = useAdminLanguage()
   const toast = useUI(s => s.toast)
   const [token, setToken] = useState('')
@@ -478,47 +490,51 @@ function SetupTokenSheet({ close, onDone, label }) {
   const [busy, setBusy] = useState(false)
 
   const save = async () => {
+    if (busy) return
     setBusy(true)
     try {
       const r = await api('/api/admin/coach/connect', { method: 'POST', body: JSON.stringify({ type: 'cli-token', token: token.trim(), account: account.trim() }) })
       setToken('')
       toast(t(r.test?.ok ? 'Connected ✅' : 'Token saved'))
       close(); onDone()
-    } catch (e) { toast(e.message); setBusy(false) }
+    } catch (e) { toast(t(adminError(e))); setBusy(false) }
   }
 
   return <>
     <h3>{t("Connect")} {label}</h3>
     <div className="muted small" style={{ lineHeight: 1.5, marginBottom: 12 }}>{t("On a trusted computer where you use Claude Code, run")} <code>{t("claude setup-token")}</code>{t(", complete its normal browser sign-in, then paste the token it prints here. This app never opens or handles Claude's authorization flow.")} </div>
-    <TextField value={token} autoFocus type="password" placeholder={t("paste setup token")} onChange={e => setToken(e.target.value)} />
+    <TextField value={token} autoFocus type="password" placeholder={t("paste setup token")} onChange={e => { setToken(e.target.value); onDraft(!!(e.target.value || account)) }} />
     <div style={{ height: 8 }} />
-    <TextField value={account} placeholder={t("whose account is this? (e.g. you@example.com)")} onChange={e => setAccount(e.target.value)} />
+    <TextField value={account} placeholder={t("whose account is this? (e.g. you@example.com)")} onChange={e => { setAccount(e.target.value); onDraft(!!(token || e.target.value)) }} />
     <div style={{ height: 12 }} />
     <Button variant="primary" disabled={busy || !token.trim()} onClick={save}>{t("Save token")}</Button>
+    <Button disabled={busy} onClick={close}>{t(token || account ? 'Discard changes' : 'Cancel')}</Button>
     <div style={{ height: 8 }} />
   </>
 }
 
-function ApiKeySheet({ close, onDone, label, placeholder, optional }) {
+function ApiKeySheet({ close, onDone, onDraft = () => {}, label, placeholder, optional }) {
   const { t } = useAdminLanguage()
   const toast = useUI(s => s.toast)
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
   const save = async () => {
+    if (busy) return
     setBusy(true)
     try {
       const r = await api('/api/admin/coach/connect', { method: 'POST', body: JSON.stringify({ type: 'apikey', token: key.trim() }) })
       toast(t(r.test?.ok ? 'Key saved ✅' : 'Key saved'))
       close(); onDone()
-    } catch (e) { toast(e.message); setBusy(false) }
+    } catch (e) { toast(t(adminError(e))); setBusy(false) }
   }
   return <>
     <h3>{label} {t("API key")}</h3>
     <div className="muted small" style={{ lineHeight: 1.5, marginBottom: 12 }}>{t("Stored encrypted on this server and sent to the provider only while a job runs. It is never shown again and never leaves the server")}{optional ? t(". For an endpoint that takes no key, you can leave this empty and close the sheet.") : '.'}
     </div>
-    <TextField value={key} autoFocus type="password" placeholder={placeholder || 'sk-…'} autoCapitalize="none" autoCorrect="off" onChange={e => setKey(e.target.value)} />
+    <TextField value={key} autoFocus type="password" placeholder={placeholder || 'sk-…'} autoCapitalize="none" autoCorrect="off" onChange={e => { setKey(e.target.value); onDraft(!!e.target.value) }} />
     <div style={{ height: 12 }} />
     <Button variant="primary" disabled={busy || !key.trim()} onClick={save}>{t("Save key")}</Button>
+    <Button disabled={busy} onClick={close}>{t(key ? 'Discard changes' : 'Cancel')}</Button>
     <div style={{ height: 8 }} />
   </>
 }

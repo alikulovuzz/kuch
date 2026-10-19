@@ -2262,4 +2262,5 @@ export default {
   'Your sports watch, calling you back.': 'Deine Sportuhr ruft dich zurück.',
   'Coach wants you back on the bar.': 'Der Coach will dich zurück an der Stange.',
   'Gentle, for headphones or a quiet room.': 'Leise, für Kopfhörer oder einen ruhigen Raum.',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "Wenn du diesen Passkey entfernst, wirst du überall sonst abgemeldet. Gekoppelte Handys müssen erneut gekoppelt werden.",
 }

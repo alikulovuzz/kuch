@@ -33,7 +33,7 @@ export function useAdminLanguage(account) {
   }
   const t = (key, ...args) => String(dictionaries[locale]?.[key] || dictionaries.en[key] || key).replace(/\{(\d+)\}/g, (match, i) => args[i] ?? match)
   const number = value => new Intl.NumberFormat(locale).format(value)
-  const date = value => value ? new Date(value).toLocaleString(locale, { timeZoneName: 'short' }) : '—'
+  const date = value => value ? new Date(value).toLocaleString(locale, { timeZoneName: 'short' }) : '–'
   const duration = ms => {
     const minutes = Math.max(0, Math.floor(ms / 60000))
     const unit = (n, unit) => new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short' }).format(n)

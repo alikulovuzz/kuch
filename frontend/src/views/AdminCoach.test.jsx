@@ -184,13 +184,15 @@ describe('AdminCoach — loading and the env kill switch', () => {
 })
 
 describe('AdminCoach — the master switch (the only way the Coach is off for everyone)', () => {
-  it('"Set up the Coach" turns it on and re-reads the status, and is the only button on the off screen', async () => {
+  it('"Set up the Coach" starts an unsaved draft, then Save changes turns it on', async () => {
     mocks.routes['/api/admin/coach'] = status({ enabled: false })
     await mount()
     expect([...host.querySelectorAll('button')].map(b => b.textContent)).toEqual(['Set up the Coach'])
 
     mocks.routes['/api/admin/coach'] = status({ enabled: true })
     await tap(btn('Set up the Coach'))
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')).toEqual([
       { path: '/api/admin/coach/config', method: 'POST', body: { enabled: true } }
     ])
@@ -199,10 +201,12 @@ describe('AdminCoach — the master switch (the only way the Coach is off for ev
     expect(master()).toBeTruthy()
   })
 
-  it('switching it off posts enabled:false and the whole wizard disappears with it', async () => {
+  it('switching it off drafts enabled:false until Save changes', async () => {
     await mount()
     mocks.routes['/api/admin/coach'] = status({ enabled: false })
     await tap(master())
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ enabled: false })
     expect(host.textContent).toContain('nobody sees it anywhere in the app')
     expect(host.querySelector('.adm-step')).toBeFalsy()
@@ -213,8 +217,10 @@ describe('AdminCoach — the master switch (the only way the Coach is off for ev
     expect(master().getAttribute('aria-checked')).toBe('true')
     mocks.routes['/api/admin/coach/config'] = new Error('config file is read-only')
     await tap(master())
+    expect(mocks.toast).not.toHaveBeenCalled()
+    await tap(btn('Save changes'))
     expect(mocks.toast).toHaveBeenCalledWith('config file is read-only')
-    expect(master().getAttribute('aria-checked')).toBe('true')
+    expect(host.textContent).toContain('Save changes')
     // A failed write must not trigger a re-read that could look like success.
     expect(sent('/api/admin/coach')).toHaveLength(1)
   })
@@ -525,11 +531,13 @@ describe('AdminCoach — daily caps (what bounds the spend on the operator\'s ac
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ caps: { perProfileDaily: 0, instanceDaily: 50 } })
   })
 
-  it('the community-medians switch is a separate write and does not carry the caps with it', async () => {
+  it('the community-medians switch joins the configuration draft and does not carry the caps with it', async () => {
     await mount()
     const switches = [...host.querySelectorAll('[role="switch"]')]
     expect(switches).toHaveLength(2)
     await tap(switches[1])
+    expect(sent('/api/admin/coach/config')).toHaveLength(0)
+    await tap(btn('Save changes'))
     expect(sent('/api/admin/coach/config')[0].body).toEqual({ community: true })
   })
 })

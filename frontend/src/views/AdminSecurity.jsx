@@ -20,13 +20,30 @@ export default function AdminSecurity({ tick = 0, onDirty = () => {} }) {
   const [message, setMessage] = useState('')
   const [proofKind, setProofKind] = useState('password')
   const [confirm, setConfirm] = useState(null)
+  const confirmDialog = useRef(null)
+  const confirmReturn = useRef(null)
+  const securityHeading = useRef(null)
+  const openConfirm = value => { confirmReturn.current = document.activeElement; setConfirm(value) }
   const [keyNames, setKeyNames] = useState({})
   const [readyKey, setReadyKey] = useState(null)
+  const hasDraft = !!(current || email || next || readyKey || Object.keys(keyNames).length)
+  const otherDraft = !!(email || next || readyKey || Object.keys(keyNames).length)
   const inFlight = useRef(false)
   const remoteBase = useStore(s => s.sync?.server)
   const load = () => api('/api/account/security').then(setStatus).catch(e => setMessage(adminError(e)))
   useEffect(() => { load() }, [tick])
-  useEffect(() => { onDirty(!!(current || email || next || readyKey || Object.keys(keyNames).length)) }, [current, email, next, readyKey, keyNames])
+  useEffect(() => { onDirty(hasDraft) }, [hasDraft])
+  useEffect(() => {
+    if (confirm) confirmDialog.current?.showModal?.()
+    else {
+      confirmDialog.current?.close?.()
+      if (confirmReturn.current) {
+        const target = confirmReturn.current.isConnected ? confirmReturn.current : securityHeading.current
+        target?.focus()
+        confirmReturn.current = null
+      }
+    }
+  }, [confirm])
   const run = async fn => {
     if (inFlight.current) return
     inFlight.current = true
@@ -43,11 +60,11 @@ export default function AdminSecurity({ tick = 0, onDirty = () => {} }) {
     if (path === '/api/account/password') setNext('')
     if (path === '/api/account/email-verification') setEmail('')
     if (path === '/api/account/passkeys/rename') setKeyNames(names => { const rest = { ...names }; delete rest[body.id]; return rest })
-    setConfirm(null); setMessage('Saved'); await load()
+    setMessage('Saved'); await load(); setConfirm(null)
   })
   if (!status) return <section className="card"><p role="status">{t(message || 'Loading…')}</p><button className="btn" onClick={load}>{t('Try again')}</button></section>
-  return <section className="card">
-    <h2>{t('My account → Security')}</h2>
+  return <section className="card adm-security">
+    <h2 ref={securityHeading} tabIndex={-1}>{t('Sign-in methods')}</h2>
     {MOBILE && <p>{t('Manage Google and passkeys in your browser. Browser sign-in is separate from this paired app.')} <a href={(remoteBase || '').replace(/\/+$/, '') + '/#/admin?section=security'} target="_blank" rel="noopener noreferrer">{t('Open in browser')}</a></p>}
     <p>{t('Keep a backup sign-in method. Removing a method revokes other browser and mobile sessions.')}</p>
     <label>{t('Confirm your identity')}<select className="adm-select" value={proofKind} onChange={e => setProofKind(e.target.value)}>
@@ -55,26 +72,26 @@ export default function AdminSecurity({ tick = 0, onDirty = () => {} }) {
     </select></label>
     {proofKind === 'password' && <label>{t('Current password')}<input className="input" name="current-password" type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} /></label>}
     <h3>Google</h3><p>{t(status.google.linked ? 'Linked' : 'Not linked')}</p>
-    {status.google.available && status.google.linked && <button className="btn" disabled={busy || MOBILE || !!(email || next || Object.keys(keyNames).length)} onClick={() => run(async () => { const r = await api('/api/account/google/proof', { method: 'POST', body: '{}' }); location.assign(r.url) })}>{t('Confirm with Google before making a change')}</button>}
+    {status.google.available && status.google.linked && <button className="btn" disabled={busy || MOBILE || hasDraft} onClick={() => run(async () => { const r = await api('/api/account/google/proof', { method: 'POST', body: '{}' }); location.assign(r.url) })}>{t('Confirm with Google before making a change')}</button>}
     {!status.google.available && <p>{t('Google sign-in is unavailable on this server.')}</p>}
-    <button className="btn" disabled={busy || MOBILE || !status.google.available || (!status.google.linked && !!(email || next || Object.keys(keyNames).length))} onClick={() => status.google.linked ? setConfirm('google') : mutate('/api/account/google/link', { returnTo: '/admin?section=security' })}>{t(status.google.linked ? 'Disconnect Google' : 'Connect Google')}</button>
+    {status.google.available && <button className="btn" disabled={busy || MOBILE || (!status.google.linked && otherDraft)} onClick={() => status.google.linked ? openConfirm('google') : mutate('/api/account/google/link', { returnTo: '/admin?section=security' })}>{t(status.google.linked ? 'Disconnect Google' : 'Connect Google')}</button>}
     <h3>{t('Login email')}</h3>
-    <p>{status.email || '—'} · {t(status.emailVerified ? 'Verified' : 'Not verified')}</p>
+    <p>{status.email || '–'} · {t(status.emailVerified ? 'Verified' : 'Not verified')}</p>
     {status.pendingEmail && <p>{t('Pending verification')}: {status.pendingEmail}</p>}
     {!status.mailAvailable && <p>{t('Outgoing mail is not configured. Contact the server operator or use another sign-in method.')}</p>}
-    <label>{t('New login email')}<input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></label>
-    <button className="btn" disabled={busy || !status.mailAvailable || !status.password.available} onClick={() => mutate('/api/account/email-verification', { email: email || status.pendingEmail || status.email })}>{t('Send verification link')}</button>
-    {(status.email || status.pendingEmail) && <button className="btn danger" disabled={busy} onClick={() => setConfirm('email')}>{t('Remove login email')}</button>}
+    {status.mailAvailable && status.password.available && <><label>{t('New login email')}<input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} /></label>
+      <button className="btn" disabled={busy} onClick={() => mutate('/api/account/email-verification', { email: email || status.pendingEmail || status.email })}>{t('Send verification link')}</button></>}
+    {(status.email || status.pendingEmail) && <button className="btn danger" disabled={busy} onClick={() => openConfirm('email')}>{t('Remove login email')}</button>}
     <h3>{t('Password')}</h3>
     <p>{t(status.password.set ? 'Password configured' : 'No password configured')}</p>
-    <label>{t('New password')}<input className="input" type="password" autoComplete="new-password" value={next} onChange={e => setNext(e.target.value)} /></label>
-    <button className="btn" disabled={busy || !status.password.available || !next} onClick={() => mutate('/api/account/password', { next })}>{t('Save password')}</button>
-    {status.password.set && <button className="btn" disabled={busy} onClick={() => setConfirm('password')}>{t('Remove password')}</button>}
+    {status.password.available ? <><label>{t('New password')}<input className="input" type="password" autoComplete="new-password" value={next} onChange={e => setNext(e.target.value)} /></label>
+      <button className="btn" disabled={busy || !next} onClick={() => mutate('/api/account/password', { next })}>{t('Save password')}</button></> : <p>{t('Password sign-in is unavailable on this server.')}</p>}
+    {status.password.set && <button className="btn" disabled={busy} onClick={() => openConfirm('password')}>{t('Remove password')}</button>}
     <h3>{t('Passkeys')}</h3>
     {(status.passkeyDetails || []).map((key, index) => <div key={key.id} className="adm-field">
       <label>{t('Passkey name')}<input className="input" value={keyNames[key.id] ?? key.name ?? t('Passkey {0}', index + 1)} maxLength={40} onChange={e => setKeyNames(names => ({ ...names, [key.id]: e.target.value }))} /></label>
       <button className="btn" disabled={busy || !(key.id in keyNames)} onClick={() => mutate('/api/account/passkeys/rename', { id: key.id, name: keyNames[key.id] })}>{t('Save')}</button>
-      <button className="btn danger" disabled={busy} onClick={() => setConfirm({ keyId: key.id })}>{t('Remove passkey')}</button>
+      <button className="btn danger" disabled={busy} onClick={() => openConfirm({ keyId: key.id })}>{t('Remove passkey')}</button>
     </div>)}
     {readyKey ? <button className="btn" disabled={busy} onClick={() => run(async () => {
       try {
@@ -88,13 +105,14 @@ export default function AdminSecurity({ tick = 0, onDirty = () => {} }) {
       setCurrent('')
     })}>{t('Add a passkey')}</button>}
     <p>{t('If all sign-in methods are lost, contact the server operator to recover this existing profile.')}</p>
-    <button className="btn" disabled={busy} onClick={() => run(async () => { const result = await signOut(); if (result?.owed && !result.stashed) setMessage('Sync pending changes before signing out.') })}>{t('Sign out')}</button>
-    <button className="btn" disabled={busy} onClick={() => setConfirm('sessions')}>{t('Sign out everywhere')}</button>
-    {confirm && <div role="group" aria-label={t('Confirm removal')}>
-      <p>{t('This revokes browser and paired mobile sessions. Continue?')}</p>
-      <button className="btn danger" disabled={busy} onClick={() => confirm === 'sessions' ? run(async () => { const result = await signOutAll(); if (result?.owed && !result.stashed) setMessage('Sync pending changes before signing out.') }) : mutate(confirm.keyId ? '/api/account/passkeys?id=' + encodeURIComponent(confirm.keyId) : '/api/account/' + confirm, {}, 'DELETE')}>{t('Confirm')}</button>
-      <button className="btn" onClick={() => setConfirm(null)}>{t('Cancel')}</button>
-    </div>}
+    <button className="btn" disabled={busy} onClick={() => hasDraft ? openConfirm('signout') : run(async () => { const result = await signOut(); if (result?.owed && !result.stashed) setMessage('Sync pending changes before signing out.') })}>{t('Sign out')}</button>
+    <button className="btn" disabled={busy} onClick={() => openConfirm('sessions')}>{t('Sign out everywhere')}</button>
+    {confirm && <dialog ref={confirmDialog} className="card adm-leave" role="alertdialog" aria-labelledby="adm-security-confirm-title" aria-describedby="adm-security-confirm-description" onCancel={event => { event.preventDefault(); setConfirm(null) }}>
+      <h3 id="adm-security-confirm-title">{t(confirm === 'signout' ? 'Discard changes and sign out?' : 'Confirm removal')}</h3>
+      <p id="adm-security-confirm-description">{t(hasDraft ? 'Your unsaved account changes will be discarded. Continue?' : 'This revokes browser and paired mobile sessions. Continue?')}</p>
+      <button className="btn" autoFocus onClick={() => setConfirm(null)}>{t('Cancel')}</button>
+      <button className="btn danger" disabled={busy} onClick={() => confirm === 'signout' ? run(async () => { const result = await signOut(); if (result?.owed && !result.stashed) setMessage('Sync pending changes before signing out.'); else setConfirm(null) }) : confirm === 'sessions' ? run(async () => { const result = await signOutAll(); if (result?.owed && !result.stashed) setMessage('Sync pending changes before signing out.'); else setConfirm(null) }) : mutate(confirm.keyId ? '/api/account/passkeys?id=' + encodeURIComponent(confirm.keyId) : '/api/account/' + confirm, {}, 'DELETE')}>{t('Confirm')}</button>
+    </dialog>}
     {message && <p role="status">{t(message)}</p>}
   </section>
 }

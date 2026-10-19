@@ -2235,4 +2235,5 @@ export default {
   'Your sports watch, calling you back.': '你的運動手錶在叫你回來。',
   'Coach wants you back on the bar.': '教練等你回到槓鈴前。',
   'Gentle, for headphones or a quiet room.': '輕柔，適合耳機或安靜的房間。',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "移除此通行密鑰後，你會從所有其他裝置登出。已配對的手機必須重新配對。",
 }

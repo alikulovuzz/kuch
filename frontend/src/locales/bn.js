@@ -2321,4 +2321,5 @@ export default {
   'Your sports watch, calling you back.': 'আপনার স্পোর্টস ঘড়ি আপনাকে ফিরে ডাকছে।',
   'Coach wants you back on the bar.': 'কোচ আপনাকে আবার বারে চান।',
   'Gentle, for headphones or a quiet room.': 'মৃদু, হেডফোন বা শান্ত ঘরের জন্য।',
+  "Removing this passkey signs you out everywhere else. Paired phones must be paired again.": "এই পাসকি সরালে অন্য সব জায়গা থেকে সাইন আউট হবেন। পেয়ার করা ফোন আবার পেয়ার করতে হবে।",
 }

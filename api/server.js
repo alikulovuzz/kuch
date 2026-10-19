@@ -997,10 +997,9 @@ const nameTaken = (name, exceptId) => {
 
 /* ---------- e-mail as a sign-in name ----------
    Optional, per profile, and only while PASSWORD_LOGIN is on: an address someone may type at the
-   password sign-in instead of their profile name. Nothing is ever sent to it — no verification,
-   no reset mail; resets stay the admin's one-time code — so the address is never proven to be
-   theirs, and it does not need to be: it is only an identifier that points at an account, and the
-   password is still what opens it. Stored as `u.email`, folded by normalizeEmail() (password.js).
+   password sign-in instead of their profile name. Existing addresses remain valid identifiers
+   without verification. Only verified addresses can receive recovery mail. Stored as `u.email`,
+   folded by normalizeEmail() (password.js).
 
    It is unique across every profile, and no profile's address may be another password-holding
    profile's name (nameTaken above says the same the other way round), so an identifier never
@@ -1986,13 +1985,10 @@ const routes = {
     if (readSession(req) !== user) return json(res, 401, { error: 'not signed in' });
     if (!passwordWayIn(user) && !passkeyCount(user)) return json(res, 409, { error: 'Keep another usable sign-in method', code: 'last-way-in' });
     delete user.google;
-    user.sv = sessionVersion(user) + 1;
-    for (const [key, value] of pairings) if (value.uid === user.id) pairings.delete(key);
-    dropDeviceLinks(db, user.id);
-    const session = s.bearer ? makeSession(user) : sessionCookie(user);
+    const renewed = revokeOtherSessions(req, user);
     await saveDb();
     audit(req, 'auth.google.remove', { user });
-    json(res, 200, { ok: true, ...(s.bearer ? { token: session } : {}) }, s.bearer ? {} : { 'Set-Cookie': session });
+    json(res, 200, { ok: true, ...renewed.body }, renewed.headers);
   },
   'POST /api/account/google/link': async (req, res) => {
     const user = readSession(req);
@@ -2014,13 +2010,17 @@ const routes = {
   'GET /api/auth/google/callback': async (req, res) => {
     if (!google.available) return json(res, 503, { error: 'Google sign-in is not configured', code: 'google-unavailable' });
     const result = await google.finish(req);
-    if (!result) return json(res, 400, { error: 'Invalid or expired sign-in transaction', code: 'google-state' });
+    if (!result) {
+      res.writeHead(303, { Location: google.destination('/admin', 'google-state'), 'Cache-Control': 'no-store' });
+      return res.end();
+    }
     let user = !result.error && db.users.find(u => u.google?.issuer === 'https://accounts.google.com' && u.google.subject === result.subject);
     let error = result.error;
     if (!error && result.link) {
       const owner = readSession(req);
       if (!owner || owner.id !== result.link.id || sessionVersion(owner) !== result.link.version) error = 'google-proof-expired';
-      else if ((user && user !== owner) || (owner.google && owner.google.subject !== result.subject)) error = 'google-conflict';
+      else if ((user && user !== owner) || (owner.google && owner.google.subject !== result.subject) ||
+        (result.verifiedEmail && db.users.some(u => u !== owner && u.email?.trim().toLowerCase() === result.verifiedEmail))) error = 'google-conflict';
       else if (result.link.proof) {
         if (!owner.google || owner.google.subject !== result.subject || result.link.session !== sessionFingerprint(req)) error = 'google-proof-expired';
         else {

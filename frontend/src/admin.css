@@ -20,7 +20,7 @@
 .adm-nav button{padding:12px 16px;border-radius:12px;text-align:start;color:var(--label);background:var(--surface-2);min-height:44px;overflow-wrap:anywhere}
 .adm-nav [aria-current="page"]{background:var(--acc-soft);color:var(--acc)}
 .adm-main{min-width:0}
-.adm-main .hdr{flex-wrap:wrap;gap:8px}
+.adm-main .hdr{flex-wrap:wrap;justify-content:flex-start;gap:8px}
 .adm-main .hdr>.btn{width:auto;font-size:13px}
 .adm-main .hdr>.adm-title{flex:1 1 100%;margin-bottom:8px}
 #app.admin-page .adm-main .list{display:flex;flex-direction:column}
@@ -30,17 +30,64 @@
 .adm-workspace .item{width:100%;text-align:start;color:var(--label)}
 .adm-workspace .tt,.adm-workspace .ss{white-space:normal;overflow-wrap:anywhere}
 .adm-workspace :is(button,input,select){min-height:44px}
+.adm-workspace .chip{min-width:44px}
 .adm-workspace :focus-visible{outline:3px solid #61e294;outline-offset:3px}
 .adm-workspace .card{border-radius:14px;padding:24px}
 .adm-workspace h1{font-size:30px;font-weight:600}
+#app.admin-page .adm-main h1{font-size:30px;font-weight:600}
 .adm-workspace h2{font-size:18px;font-weight:600}
 .adm-workspace [hidden]{display:none}
 .adm-actions .field{flex:1;min-width:0}
 .adm-actions .adm-select{width:auto;max-width:100%}
 @media(max-width:1100px){.adm-overview{grid-template-columns:minmax(0,1fr)}.adm-overview>.adm-live{grid-column:auto;grid-row:auto}}
 @media(max-width:1000px){.adm-workspace{grid-template-columns:180px minmax(0,1fr);gap:16px;padding:16px}.adm-workspace .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:650px){.adm-workspace{display:block;padding:12px}.adm-nav{position:static;flex-direction:row;flex-wrap:wrap;margin-bottom:16px}.adm-nav button{flex:1 1 auto}.adm-workspace .card{padding:16px}.adm-workspace h1{font-size:26px}}
+@media(max-width:650px){
+  .adm-workspace{display:block;padding:12px}
+  .adm-nav{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:16px}
+  .adm-nav button{width:100%;padding:10px 12px}
+  .adm-main .hdr{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px;margin-bottom:14px}
+  .adm-main .hdr>.adm-title{grid-column:1;grid-row:1;margin:0}
+  .adm-main .hdr>.adm-refresh{grid-column:2;grid-row:1}
+  .adm-main .hdr>.adm-security-link{grid-column:1/-1;grid-row:2}
+  .adm-main .hdr>.adm-copy-link{grid-column:1;grid-row:3}
+  .adm-main .hdr>.adm-select{grid-column:2;grid-row:3;min-width:112px}
+  .adm-main .hdr>.btn{padding:10px 12px;font-size:14px}
+  .adm-workspace .card{padding:16px}
+  .adm-workspace h1,#app.admin-page .adm-main h1{font-size:26px}
+}
 .adm-intro{color:var(--label-2);font-size:14px;line-height:1.45;margin:-6px 0 16px}
+
+/* Sign-in and email recovery share a compact, phone-first card. */
+.admin-page .adm-auth{max-width:440px;margin:32px auto;padding:16px}
+.adm-auth-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px;color:var(--label-2);font-size:13px;font-weight:600}
+.adm-auth-top .adm-select{width:148px;flex:none}
+.adm-auth-card{padding:24px;border-radius:16px;background:var(--surface);border:1px solid var(--sep)}
+#app.admin-page .adm-auth h1{font-size:27px;line-height:1.18;margin:0 0 20px;letter-spacing:-.025em}
+.adm-auth-form{display:grid;gap:14px}
+.adm-auth-field{min-width:0}
+.adm-auth-field>label,.adm-auth-field-head>label{display:block;margin:0 0 6px;color:var(--label-2);font-size:14px;font-weight:600}
+.adm-auth-field-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.adm-auth-field-head>label{margin:0}
+.adm-auth-field .input{min-height:48px;background:var(--surface-2);font-size:16px}
+.adm-auth-visibility,.adm-auth-text-button{color:var(--acc);font-size:14px;font-weight:600;padding:8px 0;background:none}
+.adm-auth-visibility{flex:none;min-height:44px}
+.adm-auth-submit{min-height:48px;margin-top:4px;padding:12px 16px;font-size:16px}
+.adm-auth-options{display:grid;gap:10px;margin-top:18px;padding-top:18px;border-top:1px solid var(--sep)}
+.adm-auth-options>.btn{min-height:48px;padding:12px 16px;font-size:16px}
+.adm-auth-note{color:var(--label-2);font-size:13px;line-height:1.45;margin:0}
+.adm-auth-intro{margin-bottom:18px}
+.adm-auth-card>.adm-auth-text-button{display:block;margin:14px auto 0}
+.adm-auth-home{display:block;margin:12px auto 0}
+.adm-auth-message{padding:12px;border-radius:10px;background:var(--surface-2);font-size:14px;line-height:1.45}
+@media(max-width:480px){.admin-page .adm-auth{margin:12px auto;padding:12px}.adm-auth-card{padding:20px}.adm-auth-top{margin-bottom:12px}.adm-auth-top .adm-select{width:132px}}
+
+.adm-security>h2{margin:0 0 8px}
+.adm-security>h3{margin:22px 0 4px}
+.adm-security>p{margin:0 0 10px;line-height:1.45}
+.adm-security>label{margin:12px 0}
+.adm-security .input{background:var(--surface-2);min-height:48px;margin-top:6px;font-size:16px}
+.adm-security>.btn{margin-top:8px;padding:12px 16px;font-size:15px}
+.adm-security>.adm-field .btn{margin-top:6px;padding:11px 14px;font-size:15px}
 
 /* one sentence under a card heading that says what the card is for */
 .adm-lead{color:var(--label-2);font-size:13px;line-height:1.45;margin:2px 0 12px}
@@ -112,7 +159,9 @@
   background-position:calc(100% - 20px) 50%,calc(100% - 14px) 50%;background-size:6px 6px;background-repeat:no-repeat
 }
 .adm-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
-.adm-actions .btn{min-height:44px}
+.adm-actions .btn{width:auto;min-width:160px;min-height:44px;padding:11px 15px;font-size:15px}
+.adm-actions .btn:disabled{opacity:1;background:var(--surface-2);color:var(--label-3)}
+@media(max-width:650px){.adm-actions .btn{flex:1 1 100%}}
 
 /* inline result box under the Test button */
 .adm-result{

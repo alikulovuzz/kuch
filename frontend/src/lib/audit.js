@@ -112,11 +112,14 @@ export const auditReason = msg => REASONS[msg] || (msg ? String(msg) : '')
 const ACTS = {
   'email': 'changing the sign-in e-mail',
   'email-remove': 'removing the sign-in e-mail',
+  'email-verify': 'verifying the sign-in e-mail',
   'password': 'setting or changing the password',
   'password-remove': 'removing the password',
   'passkey-add': 'adding a passkey',
   'passkey-remove': 'removing a passkey',
-  'device-link': 'making a one-time code for another device'
+  'device-link': 'making a one-time code for another device',
+  'google-link': 'linking Google',
+  'google-remove': 'disconnecting Google'
 }
 export const auditAct = act => ACTS[act] || (act ? String(act) : '')
 export const auditVocabulary = [...Object.values(LABELS), ...Object.values(REASONS), ...Object.values(ACTS), 'Unknown event', 'unknown caller']

@@ -48,7 +48,7 @@ export function googleAuth({ publicBase, clientId, clientSecret }) {
       const { payload } = await jwtVerify(tokens.id_token, keys, { algorithms: ['RS256'], issuer: ['https://accounts.google.com', 'accounts.google.com'], audience: clientId, requiredClaims: ['exp', 'iat', 'sub', 'nonce'], maxTokenAge: '10m' });
       if (payload.nonce !== transaction.nonce || typeof payload.sub !== 'string' || !payload.sub || (payload.azp && payload.azp !== clientId)) throw new Error('identity');
       if (transaction.link?.proof && (!Number.isFinite(payload.auth_time) || payload.auth_time < transaction.started - 5 || payload.auth_time > Date.now() / 1000 + 5)) throw new Error('stale-proof');
-      return { ...result, subject: payload.sub };
+      return { ...result, subject: payload.sub, verifiedEmail: payload.email_verified === true && typeof payload.email === 'string' ? payload.email.trim().toLowerCase() : null };
     } catch { return { ...result, error: 'google-failed' }; }
   }
   const destination = (returnTo, error) => base.href.replace(/\/?$/, '/') + '#' + returnPath(returnTo) + (error ? (returnTo.includes('?') ? '&' : '?') + 'authError=' + encodeURIComponent(error) : '');
