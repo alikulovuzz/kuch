@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate, useBlocker } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -328,6 +328,7 @@ export default function Admin() {
   const [dirtySecurity, setDirtySecurity] = useState(false)
   const [pendingLeave, setPendingLeave] = useState(null)
   const [formVersion, setFormVersion] = useState(0)
+  useLayoutEffect(() => { window.scrollTo(0, 0) }, [section])
   useEffect(() => { setUserPage(0) }, [search, status])
   const loadRecent = () => api('/api/admin/audit?limit=4').then(result => { setRecentEvents(result.events || []); setRecentError('') }).catch(error => setRecentError(adminError(error)))
   useEffect(() => {

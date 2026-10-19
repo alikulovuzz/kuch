@@ -232,10 +232,10 @@ body.admin-design{background:#0b0d0f}
 @media(max-width:1200px){.adm-coach-layout{grid-template-columns:minmax(0,1fr)}.adm-coach-side{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:960px){.adm-auth-shell{display:block}.adm-auth-brand{display:none}}
 @media(max-width:760px){
-  .adm-workspace{display:block;padding:0 0 calc(84px + env(safe-area-inset-bottom,0px))}
+  .adm-workspace{display:block;padding:0 0 calc(84px + var(--sab,0px))}
   .adm-sidebar{display:none}
   .adm-main{padding:0 16px 24px}
-  .adm-main .hdr{display:flex;align-items:center;flex-wrap:wrap;position:relative;margin:0 -16px 16px;padding:10px 12px 10px 16px;border-bottom:1px solid #1e2428;background:#0f1214;gap:10px}
+  .adm-main .hdr{display:flex;align-items:center;flex-wrap:wrap;position:relative;margin:0 -16px 16px;padding:calc(10px + var(--sat,0px) + var(--conn,0px)) 12px 10px 16px;border-bottom:1px solid #1e2428;background:#0f1214;gap:10px}
   .adm-mobile-mark{display:inline-flex;width:28px;height:28px;font-size:15px;border-radius:8px;grid-column:auto}
   .adm-main .hdr>.adm-title{flex:1;min-width:0;margin:0;grid-column:auto;grid-row:auto}
   #app.admin-page .adm-main h1{font-size:18px;letter-spacing:-.01em}
@@ -249,7 +249,7 @@ body.admin-design{background:#0b0d0f}
   .adm-mobile-copy{width:100%}
   .adm-mobile-meta{display:block;font-size:13px;color:#a3adb5;margin:0 0 16px;line-height:1.5}
   .adm-mobile-language .adm-select{width:auto;max-width:180px;min-height:44px;font-size:13px}
-  .adm-bottom-nav{display:flex;position:fixed;inset:auto 0 0;z-index:20;background:#0f1214f5;border-top:1px solid #23292e;padding:6px 6px calc(8px + env(safe-area-inset-bottom,0px));backdrop-filter:blur(12px)}
+  .adm-bottom-nav{display:flex;position:fixed;inset:auto 0 0;z-index:20;background:#0f1214f5;border-top:1px solid #23292e;padding:6px 6px calc(8px + var(--sab,0px));backdrop-filter:blur(12px)}
   .adm-bottom-nav>button{display:flex;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;min-height:52px;font-size:10px;font-weight:600;color:#8c969e;background:transparent;line-height:1.3;padding:2px}
   .adm-bottom-nav>button>span{display:grid;place-items:center;width:48px;height:28px;border-radius:999px}
   .adm-bottom-nav>button .icn{font-size:20px}
@@ -286,7 +286,7 @@ body.admin-design{background:#0b0d0f}
   .adm-users-card .adm-actions .adm-select{width:100%}
   .adm-workspace .adm-user-row .adm-avatar{width:34px;height:34px;font-size:12px}
   .adm-user-detail-head{margin-bottom:16px}
-  .admin-design .sheet.admin-detail-sheet{width:100%;padding:20px 16px calc(24px + env(safe-area-inset-bottom,0px))}
+  .admin-design .sheet.admin-detail-sheet{width:100%;padding:calc(20px + var(--sat,0px)) 16px calc(24px + var(--sab,0px))}
   .adm-audit-event{flex-wrap:wrap;align-items:flex-start;gap:10px}
   .adm-audit-event time{max-width:none;margin-left:44px;font-size:11px;white-space:normal;text-align:left}
   .adm-recent-event time{font-size:11px}
@@ -297,14 +297,14 @@ body.admin-design{background:#0b0d0f}
   .adm-method-actions .btn{flex:1}
   .adm-security-side{gap:16px}
   .adm-security-side .btn{width:100%}
-  .adm-coach .adm-actions{bottom:84px;gap:8px;flex-direction:row}
+  .adm-coach .adm-actions{bottom:calc(84px + var(--sab,0px));gap:8px;flex-direction:row}
   .adm-coach .adm-actions .btn{width:auto;flex:1;font-size:12px;padding:10px 8px}
   .adm-save-note{display:none}
   .adm-coach-side{display:flex}
   .adm-coach .adm-step-b{padding-left:0}
   .adm-auth-shell{display:block;min-height:100dvh;background-color:#0b0d0f;background-image:linear-gradient(#13171a 1px,transparent 1px),linear-gradient(90deg,#13171a 1px,transparent 1px);background-size:32px 32px}
   .adm-auth-brand{display:none}
-  .adm-auth-pane{min-height:100dvh;padding:12px 20px 28px;gap:28px}
+  .adm-auth-pane{min-height:100dvh;padding:calc(12px + var(--sat,0px) + var(--conn,0px)) 20px calc(28px + var(--sab,0px));gap:28px}
   .adm-auth-top .adm-select{min-height:44px;width:126px;border-radius:12px}
   .adm-auth-back{font-size:15px}
   .adm-auth-body{max-width:440px;width:100%;margin:0 auto;padding:12px 0 0;gap:28px}

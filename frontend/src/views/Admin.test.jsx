@@ -131,6 +131,16 @@ it('pages through users and starts from the first page after searching', async (
   expect(page.querySelector('.adm-pagination')).toBeNull()
 })
 
+it('opens a new section at the top after scrolling a long list', async () => {
+  const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
+  try {
+    const page = render(<Admin />); await settle()
+    scroll.mockClear()
+    act(() => page.querySelector('.adm-panel-head button').click())
+    expect(scroll).toHaveBeenCalledWith(0, 0)
+  } finally { scroll.mockRestore() }
+})
+
 it('keeps a canonical admin link selectable when copying fails', async () => {
   const page = render(<Admin />)
   await settle()
